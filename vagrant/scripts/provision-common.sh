@@ -31,3 +31,28 @@ sysctl --system > /dev/null
 
 apt-get update -qq
 apt-get install -y -qq curl vim net-tools > /dev/null
+
+# Lab admin user: passwordless sudo + password SSH login
+# (this box already has a system group named "admin"; reuse it as primary group)
+if ! id admin &>/dev/null; then
+  useradd -m -s /bin/bash -g admin admin
+fi
+echo "admin:x" | chpasswd
+usermod -aG sudo admin
+echo "admin ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/90-admin
+chmod 440 /etc/sudoers.d/90-admin
+
+sed -i -E 's/^#?PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+# cloud-image boxes ship a drop-in that disables password auth and is
+# included ahead of the main file (sshd uses first-match-wins), so patch it too
+if [ -d /etc/ssh/sshd_config.d ]; then
+  sed -i -E 's/^#?PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config.d/*.conf 2>/dev/null || true
+fi
+systemctl restart ssh
+
+# Trust the shared lab keypair so `server` can SSH in as admin passwordlessly
+install -d -m 700 -o admin -g admin /home/admin/.ssh
+touch /home/admin/.ssh/authorized_keys
+grep -qxF "$LAB_ADMIN_PUBKEY" /home/admin/.ssh/authorized_keys || echo "$LAB_ADMIN_PUBKEY" >> /home/admin/.ssh/authorized_keys
+chmod 600 /home/admin/.ssh/authorized_keys
+chown admin:admin /home/admin/.ssh/authorized_keys

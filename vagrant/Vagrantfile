@@ -4,7 +4,7 @@
 # HA Kubernetes lab: 1 LB/server, 2 masters, 3 worker nodes.
 # `vagrant up` brings up everything; `vagrant up <name>` brings up one node.
 
-BOX = "bento/ubuntu-24.04"
+BOX = "cloud-image/ubuntu-24.04"
 
 NODES = [
   { name: "server",  ip: "192.168.56.10", cpus: 1, memory: 1024 },
@@ -18,6 +18,20 @@ NODES = [
 # /etc/hosts entries shared by every node so they can reach each other by name.
 HOSTS_ENTRIES = NODES.map { |n| "#{n[:ip]} #{n[:name]}" }.join("\n")
 
+# Shared keypair so `server` can SSH into every node as `admin` without a
+# password. Generated once on the host and reused across `vagrant up` runs;
+# never committed (see .gitignore).
+require "fileutils"
+KEY_DIR = File.join(__dir__, "keys")
+PRIVATE_KEY_PATH = File.join(KEY_DIR, "lab_admin_ed25519")
+PUBLIC_KEY_PATH = "#{PRIVATE_KEY_PATH}.pub"
+
+unless File.exist?(PRIVATE_KEY_PATH)
+  FileUtils.mkdir_p(KEY_DIR)
+  system("ssh-keygen", "-t", "ed25519", "-f", PRIVATE_KEY_PATH, "-N", "", "-C", "lab-admin", "-q")
+end
+LAB_ADMIN_PUBKEY = File.read(PUBLIC_KEY_PATH).strip
+
 Vagrant.configure("2") do |config|
   config.vm.box = BOX
   config.vm.box_check_update = false
@@ -26,6 +40,7 @@ Vagrant.configure("2") do |config|
     config.vm.define node[:name] do |machine|
       machine.vm.hostname = node[:name]
       machine.vm.network "private_network", ip: node[:ip]
+      machine.disksize.size = "30GB"
 
       machine.vm.provider "virtualbox" do |vb|
         vb.name = node[:name]
@@ -37,7 +52,15 @@ Vagrant.configure("2") do |config|
 
       machine.vm.provision "shell",
         path: "scripts/provision-common.sh",
-        env: { "HOSTS_ENTRIES" => HOSTS_ENTRIES }
+        env: { "HOSTS_ENTRIES" => HOSTS_ENTRIES, "LAB_ADMIN_PUBKEY" => LAB_ADMIN_PUBKEY }
+
+      if node[:name] == "server"
+        machine.vm.provision "file",
+          source: PRIVATE_KEY_PATH,
+          destination: "/tmp/lab_admin_ed25519"
+
+        machine.vm.provision "shell", path: "scripts/provision-server.sh"
+      end
     end
   end
 end

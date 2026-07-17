@@ -22,6 +22,8 @@ every node's `/etc/hosts`).
 vagrant/
   Vagrantfile                 # defines all 6 machines
   scripts/provision-common.sh # shared provisioning, run on every node
+  scripts/provision-server.sh # server-only: SSH key install + ansible/python3/terraform
+  keys/                       # auto-generated lab-admin SSH keypair (gitignored)
 vmachines/                    # per-host notes/config (currently placeholders)
 ```
 
@@ -36,8 +38,10 @@ vmachines/                    # per-host notes/config (currently placeholders)
   4+ real cores for a dev lab, but more headroom means less contention.
 - **RAM:** 16GB host minimum, 32GB comfortable. The cluster's VMs reserve
   ~11GB total; leave the rest for the host OS and VirtualBox overhead.
-- **Disk:** 20GB+ free. Each linked-clone VM disk starts small (a few hundred
-  MB) and grows with use; the base box image is ~1-2GB downloaded once.
+- **Disk:** 20GB+ free per node you plan to run concurrently (each VM's disk
+  is capped at 30GB max, but VirtualBox allocates it dynamically — actual
+  usage starts at a few hundred MB and grows with use). The base box image
+  is downloaded once (~600MB).
 
 Confirmed working on: 16-core host, 30GB RAM, 400GB+ free disk.
 
@@ -55,6 +59,12 @@ Confirmed working on: 16-core host, 30GB RAM, 400GB+ free disk.
   sudo apt update && sudo apt install -y vagrant
   ```
   Tested with Vagrant 2.4.9.
+- **vagrant-disksize plugin** — used to cap each VM's disk at 30GB (the base
+  box's disk is normally 10GB and grows as needed, but not without this
+  plugin controlling the target size):
+  ```bash
+  vagrant plugin install vagrant-disksize
+  ```
 - **git**, and an SSH key registered with GitHub if you intend to push changes.
 
 ## Usage
@@ -71,11 +81,6 @@ vagrant halt              # stop all nodes (keeps disks)
 vagrant destroy -f        # tear down all nodes
 ```
 
-### Current status
-
-`server`, `master1`, `master2` have been brought up and verified. `node1-3`
-are defined but not yet created — run `vagrant up` to bring them up.
-
 ## What each node gets on boot
 
 `vagrant/scripts/provision-common.sh` runs on every node via the shell
@@ -88,11 +93,49 @@ provisioner:
   kubeadm/CNI plugins expect (`net.ipv4.ip_forward=1`,
   `net.bridge.bridge-nf-call-iptables=1`, etc.).
 - Installs `curl`, `vim`, `net-tools`.
+- Creates an `admin` user (password `x`) on every node with passwordless
+  sudo and SSH password login enabled — including patching the cloud-image
+  box's `/etc/ssh/sshd_config.d/60-cloudimg-settings.conf` drop-in, which
+  disables password auth by default and is read *before* the main
+  `sshd_config` (sshd uses first-match-wins), so just editing the main file
+  isn't enough.
+
+  **This is intentionally weak and only acceptable because these VMs sit on
+  the isolated `192.168.56.0/24` host-only network**, unreachable from
+  outside the host. Do not reuse this pattern (or this password) on anything
+  network-reachable. To change it, edit the `admin:x` line in
+  `provision-common.sh` and re-run `vagrant provision`.
+- Trusts a shared SSH public key for `admin` (see below), so `server` can
+  reach every node passwordlessly.
 
 **Not yet installed:** container runtime (containerd), `kubeadm`/`kubelet`/
 `kubectl`, or a CNI plugin. The VMs are prepped for a Kubernetes install but
 Kubernetes itself isn't bootstrapped yet — that's a natural next step once
 you've decided on a k8s version and CNI (Calico/Flannel/Cilium).
+
+### Keyless SSH from `server` + automation tooling
+
+The first `vagrant up` generates an ED25519 keypair at `vagrant/keys/`
+(gitignored — never commit it). The public half is trusted by every node's
+`admin` user; the private half is installed only on `server`
+(`vagrant/scripts/provision-server.sh`, via a `file` provisioner + a
+server-only shell provisioner), along with an SSH client config that skips
+host-key prompts for the lab's nodes (by hostname and by
+`192.168.56.0/24` IP). From `server`, as `admin`:
+
+```bash
+ssh admin@master1   # or any node name / 192.168.56.x — no password, no prompt
+```
+
+`server` also gets `python3`, `ansible` (via apt), and `terraform` (via
+HashiCorp's apt repo, same source used to install Vagrant on the host)
+installed, so it can act as an Ansible/Terraform control node against the
+rest of the cluster. No Ansible inventory or Terraform config is set up yet
+— just the tooling and passwordless access to build on.
+
+If you ever want a fresh keypair (e.g. suspected compromise), delete
+`vagrant/keys/` and re-run `vagrant provision` on every node — a new key
+will be generated and redistributed automatically.
 
 ## What you can change
 
@@ -113,10 +156,17 @@ NODES = [
 - **Add/remove nodes:** add or delete entries in the array — the next
   `vagrant up` picks up the change automatically. Keep IPs inside
   `192.168.56.0/24` and unique.
-- **Change the OS/box:** edit `BOX = "bento/ubuntu-24.04"` at the top.
+- **Change the OS/box:** edit `BOX = "cloud-image/ubuntu-24.04"` at the top.
   Any box with a VirtualBox provider works; verify it exists first with
   `curl -s -o /dev/null -w "%{http_code}" https://app.vagrantup.com/api/v1/box/<name>`
-  (should return 200).
+  (should return 200). Prefer cloud-image-style boxes (small native disk that
+  grows on demand) over boxes like `bento/*` that bake in a fixed 64GB
+  disk — VirtualBox can grow a disk but cannot shrink one, so a box with a
+  disk already larger than your target size can't be capped down.
+- **Change the disk size cap:** edit `machine.disksize.size = "30GB"` in the
+  Vagrantfile (requires the `vagrant-disksize` plugin, see Prerequisites).
+  Only increases are possible on already-created VMs; shrinking requires
+  `vagrant destroy` + `vagrant up` to rebuild from the box.
 - **Change the network range:** update every `ip:` in `NODES` — they must
   all stay on the same subnet for the private network to work.
 - **Add provisioning steps** (e.g. install containerd/kubeadm): extend
@@ -144,20 +194,22 @@ nodes) before scaling up to the full cluster.
 
 ## Security note
 
-`vagrant/.vagrant/` (Vagrant's local per-VM state, including auto-generated
-SSH private keys for each VM) and `vmachines/.claude/settings.local.json`
-(local tool settings) ended up committed to this repo. Neither is meant to
-be version-controlled — `.vagrant/` is regenerated automatically by
-`vagrant up` and is host-specific, and the SSH keys in it only grant access
-to VMs on the local `192.168.56.0/24` host-only network, but committing
-private keys is bad practice regardless. Recommended cleanup:
+The initial commit accidentally included `vagrant/.vagrant/` (Vagrant's
+local per-VM state, including auto-generated SSH private keys) and
+`vmachines/.claude/settings.local.json` (local tool settings). This was
+fixed in a follow-up commit — both are now untracked via `.gitignore` and
+removed from the current snapshot. The old commit still has them in git
+history; the exposed SSH keys only grant access to VMs on the local
+`192.168.56.0/24` host-only network (not reachable remotely), so the
+practical risk is low, but a full history rewrite (`git filter-repo` +
+force-push) would be needed to remove them entirely if that matters for
+your use case.
 
-```bash
-git rm -r --cached vagrant/.vagrant vmachines/.claude/settings.local.json
-cat >> .gitignore <<EOF
-.vagrant/
-.claude/settings.local.json
-EOF
-git add .gitignore
-git commit -m "Stop tracking local Vagrant state and Claude settings"
-```
+### Switching base box: bento → cloud-image
+
+The box was changed from `bento/ubuntu-24.04` to `cloud-image/ubuntu-24.04`
+specifically to support the 30GB disk cap — bento's box bakes in a fixed
+64GB LVM-partitioned disk that VirtualBox cannot shrink, while Canonical's
+cloud image starts at 10GB and grows cleanly to whatever size
+`vagrant-disksize` requests, with a plain GPT partition table (no LVM) that
+cloud-init auto-resizes on first boot.

@@ -46,7 +46,6 @@ Vagrant.configure("2") do |config|
         vb.name = node[:name]
         vb.cpus = node[:cpus]
         vb.memory = node[:memory]
-        vb.linked_clone = true
         vb.gui = false
       end
 

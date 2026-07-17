@@ -1,0 +1,43 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+#
+# HA Kubernetes lab: 1 LB/server, 2 masters, 3 worker nodes.
+# `vagrant up` brings up everything; `vagrant up <name>` brings up one node.
+
+BOX = "bento/ubuntu-24.04"
+
+NODES = [
+  { name: "server",  ip: "192.168.56.10", cpus: 1, memory: 1024 },
+  { name: "master1", ip: "192.168.56.11", cpus: 2, memory: 2048 },
+  { name: "master2", ip: "192.168.56.12", cpus: 2, memory: 2048 },
+  { name: "node1",   ip: "192.168.56.13", cpus: 1, memory: 2048 },
+  { name: "node2",   ip: "192.168.56.14", cpus: 1, memory: 2048 },
+  { name: "node3",   ip: "192.168.56.15", cpus: 1, memory: 2048 },
+]
+
+# /etc/hosts entries shared by every node so they can reach each other by name.
+HOSTS_ENTRIES = NODES.map { |n| "#{n[:ip]} #{n[:name]}" }.join("\n")
+
+Vagrant.configure("2") do |config|
+  config.vm.box = BOX
+  config.vm.box_check_update = false
+
+  NODES.each do |node|
+    config.vm.define node[:name] do |machine|
+      machine.vm.hostname = node[:name]
+      machine.vm.network "private_network", ip: node[:ip]
+
+      machine.vm.provider "virtualbox" do |vb|
+        vb.name = node[:name]
+        vb.cpus = node[:cpus]
+        vb.memory = node[:memory]
+        vb.linked_clone = true
+        vb.gui = false
+      end
+
+      machine.vm.provision "shell",
+        path: "scripts/provision-common.sh",
+        env: { "HOSTS_ENTRIES" => HOSTS_ENTRIES }
+    end
+  end
+end

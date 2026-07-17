@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd /home/prathameshmore/lab-setup-code && ls -la && echo \"---tree---\" && find . -maxdepth 3 -not -path '*/.git*')",
+      "Bash(VBoxManage list *)",
+      "Bash(vagrant --version)",
+      "Bash(VBoxManage --version)",
+      "Bash(apt list *)",
+      "Bash(curl -fsSL https://apt.releases.hashicorp.com/dists/)",
+      "Bash(set -e)",
+      "Bash(curl -fsSL https://apt.releases.hashicorp.com/gpg)",
+      "Bash(sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg)",
+      "Bash(lsb_release -cs)",
+      "Bash(echo \"deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $\\(lsb_release -cs\\) main\")",
+      "Bash(sudo tee /etc/apt/sources.list.d/hashicorp.list)",
+      "Bash(sudo apt update)",
+      "Bash(sudo apt install -y vagrant)",
+      "Bash(mkdir -p /home/prathameshmore/lab-setup-code/vagrant)",
+      "Bash(vagrant validate *)",
+      "Bash(vagrant status *)",
+      "Bash(timeout 480 vagrant up server)",
+      "Bash(curl -s \"https://app.vagrantup.com/api/v1/box/ubuntu/noble64\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" \"https://app.vagrantup.com/api/v1/box/generic/ubuntu2404-desktop\")",
+      "Bash(timeout 600 vagrant up server)",
+      "Bash(vagrant ssh *)",
+      "Bash(vagrant provision *)",
+      "Bash(vagrant destroy *)",
+      "Bash(vagrant global-status *)",
+      "Bash(vagrant box *)",
+      "Bash(vagrant up *)",
+      "Read(//home/prathameshmore/**)",
+      "Read(//home/prathameshmore/.local/share/Trash/**)",
+      "Bash(gh auth *)",
+      "Bash(ssh -T git@github.com -o BatchMode=yes -o StrictHostKeyChecking=no)"
+    ]
+  }
+}

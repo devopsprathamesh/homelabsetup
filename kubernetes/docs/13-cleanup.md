@@ -8,7 +8,7 @@ entirely.
 Useful if you want to re-run this guide from scratch without waiting for
 `vagrant up` again.
 
-On **master1** and **master2**:
+On **master1**, **master2**, and **master3**:
 
 ```bash
 sudo systemctl stop kube-apiserver kube-controller-manager kube-scheduler etcd

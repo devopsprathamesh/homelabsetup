@@ -22,7 +22,7 @@ ansible/
 | Group          | Hosts                    | Role                        |
 |----------------|---------------------------|------------------------------|
 | `loadbalancer` | server (192.168.56.10)    | Load balancer / entry point |
-| `masters`      | master1, master2           | Control plane (HA pair)     |
+| `masters`      | master1, master2, master3  | Control plane (HA trio)     |
 | `workers`      | node1, node2, node3        | Worker nodes                |
 | `k8s_cluster`  | masters + workers          | Parent group for cluster-wide plays |
 

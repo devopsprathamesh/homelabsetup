@@ -1,11 +1,14 @@
 # 06 — Bootstrapping the Control Plane
 
-Run on **both `master1` and `master2`** unless stated otherwise.
+Run on **`master1`, `master2`, and `master3`** unless stated otherwise.
 
 Each master runs its own full set of `kube-apiserver`,
 `kube-controller-manager`, and `kube-scheduler` — they're stateless aside
-from leader-election locks they take out in etcd, so running two full
-copies is the normal HA pattern (unlike etcd, which needs an odd quorum).
+from leader-election locks they take out in etcd, so running three full
+copies is the normal HA pattern (etcd itself needs an odd quorum for a
+different reason — see the [README](../README.md#etcd-fault-tolerance) —
+but apiserver/controller-manager/scheduler just need "more than one" for
+redundancy, any count works).
 
 ## 1. Download and install binaries
 
@@ -38,6 +41,9 @@ INTERNAL_IP=192.168.56.11
 
 # On master2:
 INTERNAL_IP=192.168.56.12
+
+# On master3:
+INTERNAL_IP=192.168.56.16
 ```
 
 ```bash
@@ -50,7 +56,7 @@ Documentation=https://github.com/kubernetes/kubernetes
 ExecStart=/usr/local/bin/kube-apiserver \\
   --advertise-address=${INTERNAL_IP} \\
   --allow-privileged=true \\
-  --apiserver-count=2 \\
+  --apiserver-count=3 \\
   --audit-log-maxage=30 \\
   --audit-log-maxbackup=3 \\
   --audit-log-maxsize=100 \\
@@ -62,7 +68,7 @@ ExecStart=/usr/local/bin/kube-apiserver \\
   --etcd-cafile=/var/lib/kubernetes/ca.pem \\
   --etcd-certfile=/var/lib/kubernetes/kubernetes.pem \\
   --etcd-keyfile=/var/lib/kubernetes/kubernetes-key.pem \\
-  --etcd-servers=https://192.168.56.11:2379,https://192.168.56.12:2379 \\
+  --etcd-servers=https://192.168.56.11:2379,https://192.168.56.12:2379,https://192.168.56.16:2379 \\
   --encryption-provider-config=/var/lib/kubernetes/encryption-config.yaml \\
   --kubelet-certificate-authority=/var/lib/kubernetes/ca.pem \\
   --kubelet-client-certificate=/var/lib/kubernetes/kubernetes.pem \\
@@ -120,7 +126,7 @@ WantedBy=multi-user.target
 EOF
 ```
 
-`--leader-elect=true` is what makes running two copies (one per master)
+`--leader-elect=true` is what makes running three copies (one per master)
 safe — only one becomes active leader at a time, coordinated via a lease
 in the API server.
 
@@ -168,7 +174,7 @@ sleep 5
 sudo systemctl status kube-apiserver kube-controller-manager kube-scheduler --no-pager
 ```
 
-## 6. Verify (on either master)
+## 6. Verify (on any master)
 
 ```bash
 sudo cp admin.kubeconfig /var/lib/kubernetes/ 2>/dev/null || true
@@ -178,7 +184,16 @@ curl -k https://127.0.0.1:6443/version
 
 If `kube-apiserver` fails to start, check `journalctl -u kube-apiserver -n 100 --no-pager` —
 the most common causes are a typo'd flag or etcd not reachable yet
-(confirm `sudo systemctl status etcd` is healthy on both masters first).
+(confirm `sudo systemctl status etcd` is healthy on all three masters
+first).
+
+**Adding `master3` to an already-running control plane:** this doc's
+`--etcd-servers` and `-hostname` cert SANs already include `master3`, so
+if `master1`/`master2` were bootstrapped before `master3` existed, restart
+their `kube-apiserver` after copying the regenerated `kubernetes.pem`/
+`kubernetes-key.pem` (see [02](02-certificate-authority.md)) so they pick
+up the new etcd member and cert SANs:
+`sudo systemctl restart kube-apiserver` on `master1` and `master2`.
 
 ## 7. RBAC: allow kube-apiserver to talk to kubelets
 

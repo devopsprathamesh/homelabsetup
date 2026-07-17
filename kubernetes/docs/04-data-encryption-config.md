@@ -27,10 +27,10 @@ The `identity: {}` provider is listed second as a fallback so already-plain
 data stays readable during a future re-key rotation; new writes use
 `aescbc` (first provider wins for writes).
 
-Distribute to both control-plane nodes:
+Distribute to all three control-plane nodes:
 
 ```bash
-for master in master1 master2; do
+for master in master1 master2 master3; do
   scp encryption-config.yaml admin@lab-${master}:~/
 done
 ```

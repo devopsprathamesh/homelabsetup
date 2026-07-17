@@ -92,10 +92,24 @@ NodePort traffic to the right backend cluster-wide.
 
 ## 8. Control-plane HA (optional, destructive-ish but reversible)
 
+With 3 masters, the cluster tolerates losing any one node — both the
+apiserver (via the LB) and etcd (via quorum) stay fully functional:
+
 ```bash
 ssh admin@lab-master1 'sudo systemctl stop kube-apiserver'
-kubectl get nodes   # should still succeed, served by master2 via the LB
+kubectl get nodes   # should still succeed, served by master2/master3 via the LB
 ssh admin@lab-master1 'sudo systemctl start kube-apiserver'
+```
+
+To specifically confirm etcd quorum survives a single-node loss (not just
+the apiserver), stop etcd itself on one master and confirm writes still
+work through the other two:
+
+```bash
+ssh admin@lab-master1 'sudo systemctl stop etcd'
+kubectl create namespace etcd-ha-test   # a write, not just a read — proves quorum held
+kubectl delete namespace etcd-ha-test
+ssh admin@lab-master1 'sudo systemctl start etcd'
 ```
 
 ## Cleanup of smoke-test objects

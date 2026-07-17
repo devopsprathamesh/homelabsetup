@@ -148,7 +148,7 @@ for node in node1 node2 node3; do
   scp ${node}.kubeconfig kube-proxy.kubeconfig admin@lab-${node}:~/
 done
 
-for master in master1 master2; do
+for master in master1 master2 master3; do
   scp admin.kubeconfig kube-controller-manager.kubeconfig kube-scheduler.kubeconfig \
       admin@lab-${master}:~/
 done

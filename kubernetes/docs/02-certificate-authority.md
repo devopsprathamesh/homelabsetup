@@ -134,7 +134,7 @@ cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json \
 ## 5. kube-apiserver cert
 
 This one needs every address a client might use to reach the API server as
-a SAN: both master IPs, the LB IP, the Kubernetes Service cluster IP
+a SAN: all three master IPs, the LB IP, the Kubernetes Service cluster IP
 (`10.32.0.1`, first address in `SERVICE_CIDR`), localhost, and the internal
 DNS names the `kubernetes` Service resolves to.
 
@@ -151,7 +151,7 @@ EOF
 
 cfssl gencert \
   -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json \
-  -hostname=10.32.0.1,192.168.56.10,192.168.56.11,192.168.56.12,127.0.0.1,lab-server,lab-master1,lab-master2,kubernetes.default \
+  -hostname=10.32.0.1,192.168.56.10,192.168.56.11,192.168.56.12,192.168.56.16,127.0.0.1,lab-server,lab-master1,lab-master2,lab-master3,kubernetes.default \
   -profile=kubernetes kubernetes-csr.json | cfssljson -bare kubernetes
 ```
 
@@ -183,7 +183,7 @@ for node in node1 node2 node3; do
   scp ca.pem ${node}-key.pem ${node}.pem admin@lab-${node}:~/
 done
 
-for master in master1 master2; do
+for master in master1 master2 master3; do
   scp ca.pem ca-key.pem kubernetes-key.pem kubernetes.pem \
       service-account-key.pem service-account.pem \
       admin@lab-${master}:~/
@@ -193,5 +193,17 @@ done
 `kube-proxy`, `kube-controller-manager`, `kube-scheduler`, and `admin`
 certs stay on the client machine for now — they get embedded into
 kubeconfigs in the next step rather than copied raw.
+
+**Adding `master3` to an already-running 2-master cluster:** the
+`kubernetes` cert above was just regenerated with `master3`'s IP added to
+its SAN list — that's a *new* cert, not an update to the old one, so
+`master1` and `master2` also need the fresh `kubernetes.pem`/
+`kubernetes-key.pem` copied over (the `for master in ...` loop above
+already covers all three), followed by `sudo systemctl restart
+kube-apiserver` on `master1` and `master2` to pick it up. Skipping this
+leaves the old cert in place there, which lacks `master3`'s SAN — harmless
+for `master1`/`master2` themselves (clients aren't connecting to
+`master3`'s IP through them), but worth doing so all three masters are
+running from the same cert going forward.
 
 Next: [03 — Kubernetes Configuration Files](03-kubernetes-configuration-files.md)

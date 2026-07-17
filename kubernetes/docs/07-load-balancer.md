@@ -41,6 +41,7 @@ backend kubernetes-masters
     option tcp-check
     server master1 192.168.56.11:6443 check
     server master2 192.168.56.12:6443 check
+    server master3 192.168.56.16:6443 check
 
 listen stats
     bind *:9000

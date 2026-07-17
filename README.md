@@ -1,13 +1,14 @@
 # Home Lab: HA Kubernetes on VirtualBox + Vagrant
 
-Automates creation of a 6-node lab for a highly-available Kubernetes cluster,
+Automates creation of a 7-node lab for a highly-available Kubernetes cluster,
 running as local VirtualBox VMs and orchestrated with a single Vagrantfile.
 
 | Node    | Role                          | IP             | vCPU | RAM  |
 |---------|-------------------------------|----------------|------|------|
 | server  | Load balancer / entry point   | 192.168.56.10  | 1    | 1GB  |
-| master1 | Control plane (HA pair)       | 192.168.56.11  | 2    | 2GB  |
-| master2 | Control plane (HA pair)       | 192.168.56.12  | 2    | 2GB  |
+| master1 | Control plane (HA trio)       | 192.168.56.11  | 2    | 2GB  |
+| master2 | Control plane (HA trio)       | 192.168.56.12  | 2    | 2GB  |
+| master3 | Control plane (HA trio)       | 192.168.56.16  | 2    | 2GB  |
 | node1   | Worker                        | 192.168.56.13  | 1    | 2GB  |
 | node2   | Worker                        | 192.168.56.14  | 1    | 2GB  |
 | node3   | Worker                        | 192.168.56.15  | 1    | 2GB  |
@@ -20,7 +21,7 @@ every node's `/etc/hosts`).
 
 ```
 vagrant/
-  Vagrantfile                 # defines all 6 machines
+  Vagrantfile                 # defines all 7 machines
   scripts/provision-common.sh # shared provisioning, run on every node
   scripts/provision-server.sh # server-only: SSH key install + ansible/python3/terraform
   keys/                       # auto-generated lab-admin SSH keypair (gitignored)
@@ -34,10 +35,10 @@ vmachines/                    # per-host notes/config (currently placeholders)
 - **CPU virtualization** (Intel VT-x / AMD-V) enabled in BIOS/UEFI — required
   by VirtualBox to run 64-bit guests.
 - **CPU cores:** 4 physical cores minimum, 8+ recommended. The full cluster
-  requests 9 vCPUs total (1+2+2+1+1+1); VirtualBox oversubscribes fine on
+  requests 10 vCPUs total (1+2+2+2+1+1+1); VirtualBox oversubscribes fine on
   4+ real cores for a dev lab, but more headroom means less contention.
 - **RAM:** 16GB host minimum, 32GB comfortable. The cluster's VMs reserve
-  ~11GB total; leave the rest for the host OS and VirtualBox overhead.
+  ~13GB total; leave the rest for the host OS and VirtualBox overhead.
 - **Disk:** 20GB+ free per node you plan to run concurrently (each VM's disk
   is capped at 30GB max, but VirtualBox allocates it dynamically — actual
   usage starts at a few hundred MB and grows with use). The base box image
@@ -146,14 +147,19 @@ can SSH in directly from this machine too, not just from `server`:
 ```bash
 ssh admin@lab-server
 ssh admin@lab-master1
-# ...lab-master2, lab-node1, lab-node2, lab-node3
+# ...lab-master2, lab-master3, lab-node1, lab-node2, lab-node3
 ```
 
 The `lab-*` hostnames are entries this setup added to the desktop's
-`/etc/hosts` (192.168.56.10-15) — prefixed with `lab-` because this host
+`/etc/hosts` (192.168.56.10-16) — prefixed with `lab-` because this host
 already had an unrelated `server` entry (192.168.29.47) that would otherwise
 collide. If you SSH in with a different key than `~/.ssh/id_ed25519`, edit
 `HOST_PUBKEY_PATH` in the Vagrantfile and re-run `vagrant provision`.
+
+**Note:** these `lab-*` host entries live only on this desktop's
+`/etc/hosts` — they aren't part of the Vagrantfile/provisioning and won't
+follow you to another machine. If you add a node, re-run the same `sudo`
+block manually (or script it) to add its `lab-<name>` entry here too.
 
 ## What you can change
 
@@ -171,9 +177,14 @@ NODES = [
 - **Resize a node:** edit its `cpus:`/`memory:` values. Note kubeadm hard-
   requires `cpus: 2` on master nodes (`kubeadm init` fails preflight checks
   below that); worker nodes and the LB can go as low as 1.
-- **Add/remove nodes:** add or delete entries in the array — the next
-  `vagrant up` picks up the change automatically. Keep IPs inside
-  `192.168.56.0/24` and unique.
+- **Add/remove nodes:** add or delete entries in the array, then
+  `vagrant up <name>` for the new one. Keep IPs inside `192.168.56.0/24`
+  and unique. After adding a node, also re-run `vagrant provision` on the
+  *existing* nodes so their `/etc/hosts` (and `server`'s SSH `Host` pattern,
+  which is built dynamically from `NODES`) picks up the new node — otherwise
+  they won't be able to resolve or SSH to it by name yet. If you SSH from
+  this desktop, add a matching `lab-<name>` line to `/etc/hosts` too (see
+  Keyless SSH section below).
 - **Change the OS/box:** edit `BOX = "cloud-image/ubuntu-24.04"` at the top.
   Any box with a VirtualBox provider works; verify it exists first with
   `curl -s -o /dev/null -w "%{http_code}" https://app.vagrantup.com/api/v1/box/<name>`
@@ -191,8 +202,10 @@ NODES = [
   `vagrant/scripts/provision-common.sh`, or add a second
   `machine.vm.provision "shell", path: "..."` block in the Vagrantfile if a
   node needs something the others don't (e.g. HAProxy only on `server`).
-- **Disable linked clones** (slower but fully independent VM disks): remove
-  `vb.linked_clone = true` from the provider block.
+- **Switch to linked clones** (faster VM creation, much less disk usage, at
+  the cost of a shared "base" VM appearing in VirtualBox that every node's
+  disk depends on): add `vb.linked_clone = true` to the provider block.
+  Currently using full clones instead — see the switching note below.
 
 ## Notable issue hit and fixed during setup
 
@@ -209,6 +222,29 @@ moving provisioning into a real script file
 environment variable. Verified fixed with a full smoke test (swap off,
 sysctls set, kernel modules loaded, `/etc/hosts` correct, ping between
 nodes) before scaling up to the full cluster.
+
+`provision-server.sh` originally hardcoded the node names in `admin`'s SSH
+client config (`Host 192.168.56.* server master1 master2 node1 node2
+node3`) instead of deriving them from `NODES`. It worked until `master3` was
+added — `ssh master3` from `server` then failed host-key verification
+because `master3` wasn't in that hardcoded list (connecting by IP still
+worked, since `192.168.56.*` did match). Fixed by passing a `NODE_NAMES`
+environment variable (built from `NODES.map { |n| n[:name] }`) into
+`provision-server.sh` and interpolating it into the `Host` line, so adding a
+node to `NODES` now automatically covers it — no separate list to remember
+to update.
+
+## Linked clones → full clones
+
+Initially used `vb.linked_clone = true`, which is faster to create and uses
+far less disk (each node stores only its diff from a shared base image).
+Switched to full clones (the VirtualBox provider's default — the line was
+removed rather than set to `false`) because the shared "base" VM that
+linked clones leave behind in the VirtualBox GUI was confusing without
+context. Trade-off: node creation is slower and each node reserves its full
+30GB disk allocation independently, but every node is now fully
+self-contained with no shared dependency. To switch back, add
+`vb.linked_clone = true` to the provider block in the Vagrantfile.
 
 ## Security note
 

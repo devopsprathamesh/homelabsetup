@@ -18,14 +18,16 @@ the lab network.
 ## 1. Confirm connectivity to every node
 
 ```bash
-for h in lab-server lab-master1 lab-master2 lab-node1 lab-node2 lab-node3; do
+for h in lab-server lab-master1 lab-master2 lab-master3 lab-node1 lab-node2 lab-node3; do
   echo "== $h =="; ssh admin@$h 'hostname; uname -r'
 done
 ```
 
-If `lab-*` hostnames aren't resolving, use the raw `192.168.56.1{0..5}`
-IPs instead, or check `/etc/hosts` on your desktop (see root README's
-"Keyless SSH from this desktop" section).
+If `lab-*` hostnames aren't resolving, use the raw IPs instead
+(`192.168.56.10-15`, plus `192.168.56.16` for `master3`), or check
+`/etc/hosts` on your desktop (see root README's "Keyless SSH from this
+desktop" section — note `master3` was added after that section's `sudo`
+block ran, so you may need to add its `lab-master3` line by hand).
 
 ## 2. Confirm swap is off and sysctls are set
 
@@ -33,7 +35,7 @@ IPs instead, or check `/etc/hosts` on your desktop (see root README's
 but verify — a live kubelet will refuse to start with swap on:
 
 ```bash
-for h in lab-master1 lab-master2 lab-node1 lab-node2 lab-node3; do
+for h in lab-master1 lab-master2 lab-master3 lab-node1 lab-node2 lab-node3; do
   echo "== $h =="
   ssh admin@$h 'swapon --show; sysctl net.ipv4.ip_forward net.bridge.bridge-nf-call-iptables'
 done
@@ -80,6 +82,7 @@ kubeconfig server URLs throughout the guide.
 LB_IP=192.168.56.10       # server
 MASTER1_IP=192.168.56.11
 MASTER2_IP=192.168.56.12
+MASTER3_IP=192.168.56.16
 NODE1_IP=192.168.56.13
 NODE2_IP=192.168.56.14
 NODE3_IP=192.168.56.15

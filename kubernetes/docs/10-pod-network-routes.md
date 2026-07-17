@@ -14,7 +14,7 @@ Recall the mapping:
 | node2 | 192.168.56.14  | 10.200.1.0/24  |
 | node3 | 192.168.56.15  | 10.200.2.0/24  |
 
-## Option A — add routes on every node (node1-3, master1-2, server)
+## Option A — add routes on every node (node1-3, master1-3, server)
 
 Run this on **every** VM in the lab (masters and the LB need it too, so
 `kubectl exec`/health checks/anything originating from them can reach pod
@@ -33,7 +33,7 @@ sudo ip route add 10.200.2.0/24 via 192.168.56.15
 sudo ip route add 10.200.0.0/24 via 192.168.56.13
 sudo ip route add 10.200.1.0/24 via 192.168.56.14
 
-# Run on master1, master2, and server (all three pod CIDRs):
+# Run on master1, master2, master3, and server (all three pod CIDRs):
 sudo ip route add 10.200.0.0/24 via 192.168.56.13
 sudo ip route add 10.200.1.0/24 via 192.168.56.14
 sudo ip route add 10.200.2.0/24 via 192.168.56.15

@@ -1,7 +1,7 @@
 # Kubernetes the Hard Way — this lab
 
 A from-scratch Kubernetes install (no kubeadm, no installer scripts) targeting
-the 6 VMs already provisioned by [`../vagrant/`](../vagrant/): every control
+the 7 VMs already provisioned by [`../vagrant/`](../vagrant/): every control
 plane and node component is a hand-built binary running as a systemd unit,
 following the shape of Kelsey Hightower's [Kubernetes the Hard Way](https://github.com/kelseyhightower/kubernetes-the-hard-way),
 adapted to this lab's topology.
@@ -13,6 +13,7 @@ adapted to this lab's topology.
 | server  | HAProxy load balancer       | 192.168.56.10 | 1    | 1GB  |
 | master1 | Control plane + etcd        | 192.168.56.11 | 2    | 2GB  |
 | master2 | Control plane + etcd        | 192.168.56.12 | 2    | 2GB  |
+| master3 | Control plane + etcd        | 192.168.56.16 | 2    | 2GB  |
 | node1   | Worker                      | 192.168.56.13 | 1    | 2GB  |
 | node2   | Worker                      | 192.168.56.14 | 1    | 2GB  |
 | node3   | Worker                      | 192.168.56.15 | 1    | 2GB  |
@@ -22,40 +23,38 @@ from `server` and from the desktop host (see [../README.md](../README.md)).
 Network: `192.168.56.0/24`, host-only, not reachable outside the host.
 
 ```
-                        ┌─────────────────┐
-                        │  server (LB)    │
-                        │  HAProxy :6443  │
-                        └────────┬────────┘
-                    ┌────────────┴────────────┐
-                    ▼                         ▼
-          ┌──────────────────┐      ┌──────────────────┐
-          │ master1           │      │ master2           │
-          │ etcd + apiserver  │◄────►│ etcd + apiserver  │
-          │ controller-mgr    │      │ controller-mgr    │
-          │ scheduler         │      │ scheduler         │
-          └──────────────────┘      └──────────────────┘
-                    ▲                         ▲
-        ┌───────────┼─────────────────────────┼───────────┐
-        ▼           ▼                         ▼           ▼
-   ┌─────────┐ ┌─────────┐               ┌─────────┐ ┌─────────┐
-   │ node1   │ │ node2   │               │ node3   │ │  ...    │
-   │ kubelet │ │ kubelet │               │ kubelet │ │         │
-   │kube-proxy│ │kube-proxy│              │kube-proxy│ │         │
-   │containerd│ │containerd│              │containerd│ │         │
-   └─────────┘ └─────────┘               └─────────┘ └─────────┘
+                              ┌─────────────────┐
+                              │  server (LB)    │
+                              │  HAProxy :6443  │
+                              └────────┬────────┘
+                    ┌──────────────────┼──────────────────┐
+                    ▼                  ▼                  ▼
+          ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐
+          │ master1           │ │ master2           │ │ master3           │
+          │ etcd + apiserver  │◄►│ etcd + apiserver  │◄►│ etcd + apiserver  │
+          │ controller-mgr    │ │ controller-mgr    │ │ controller-mgr    │
+          │ scheduler         │ │ scheduler         │ │ scheduler         │
+          └──────────────────┘ └──────────────────┘ └──────────────────┘
+                    ▲                  ▲                  ▲
+        ┌───────────┼──────────────────┼──────────────────┼───────────┐
+        ▼           ▼                  ▼                  ▼           ▼
+   ┌─────────┐ ┌─────────┐        ┌─────────┐        ┌─────────┐
+   │ node1   │ │ node2   │        │ node3   │        │  ...    │
+   │ kubelet │ │ kubelet │        │ kubelet │        │         │
+   │kube-proxy│ │kube-proxy│       │kube-proxy│       │         │
+   │containerd│ │containerd│       │containerd│       │         │
+   └─────────┘ └─────────┘        └─────────┘        └─────────┘
 ```
 
-## ⚠️ Known limitation: 2-node etcd
+## etcd fault tolerance
 
-etcd uses Raft consensus, which needs a **majority** of members alive to
-accept writes. With 2 members, losing either `master1` or `master2` loses
-quorum — the surviving node cannot serve writes even though it's healthy.
-Two control planes give you API-server-level redundancy behind the load
-balancer (reads/cached data still work, and you avoid a single point of
-failure for the API frontend), but **not** true etcd fault tolerance. Real
-HA etcd wants an odd number ≥ 3. If you later add a 3rd control-plane node,
-re-run [docs/05-bootstrapping-etcd.md](docs/05-bootstrapping-etcd.md) with
-the updated member list.
+With `master3` added, etcd now has 3 members — Raft consensus needs a
+**majority** to accept writes, so a 3-member cluster tolerates losing
+**any one** node (2 of 3 still form quorum) while staying fully writable.
+That's genuine HA, unlike the earlier 2-master topology (documented in git
+history) where losing either master lost quorum entirely. Going forward,
+always keep the control-plane count odd (3, 5, ...) — an even number adds a
+node without adding tolerance.
 
 ## Versions used in this guide
 
@@ -78,7 +77,7 @@ mid-guide.
 2. [Certificate Authority](docs/02-certificate-authority.md) — CA + all component certs
 3. [Kubernetes Configuration Files](docs/03-kubernetes-configuration-files.md) — kubeconfigs
 4. [Data Encryption Config](docs/04-data-encryption-config.md) — secrets-at-rest key
-5. [Bootstrapping etcd](docs/05-bootstrapping-etcd.md) — on master1 + master2
+5. [Bootstrapping etcd](docs/05-bootstrapping-etcd.md) — on master1 + master2 + master3
 6. [Bootstrapping the Control Plane](docs/06-bootstrapping-control-plane.md) — apiserver, controller-manager, scheduler
 7. [Load Balancer](docs/07-load-balancer.md) — HAProxy on `server`
 8. [Bootstrapping Worker Nodes](docs/08-bootstrapping-worker-nodes.md) — containerd, kubelet, kube-proxy

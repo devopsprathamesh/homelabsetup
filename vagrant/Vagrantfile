@@ -10,6 +10,7 @@ NODES = [
   { name: "server",  ip: "192.168.56.10", cpus: 1, memory: 1024 },
   { name: "master1", ip: "192.168.56.11", cpus: 2, memory: 2048 },
   { name: "master2", ip: "192.168.56.12", cpus: 2, memory: 2048 },
+  { name: "master3", ip: "192.168.56.16", cpus: 2, memory: 2048 },
   { name: "node1",   ip: "192.168.56.13", cpus: 1, memory: 2048 },
   { name: "node2",   ip: "192.168.56.14", cpus: 1, memory: 2048 },
   { name: "node3",   ip: "192.168.56.15", cpus: 1, memory: 2048 },
@@ -17,6 +18,7 @@ NODES = [
 
 # /etc/hosts entries shared by every node so they can reach each other by name.
 HOSTS_ENTRIES = NODES.map { |n| "#{n[:ip]} #{n[:name]}" }.join("\n")
+NODE_NAMES = NODES.map { |n| n[:name] }.join(" ")
 
 # Shared keypair so `server` can SSH into every node as `admin` without a
 # password. Generated once on the host and reused across `vagrant up` runs;
@@ -67,7 +69,9 @@ Vagrant.configure("2") do |config|
           source: PRIVATE_KEY_PATH,
           destination: "/tmp/lab_admin_ed25519"
 
-        machine.vm.provision "shell", path: "scripts/provision-server.sh"
+        machine.vm.provision "shell",
+          path: "scripts/provision-server.sh",
+          env: { "NODE_NAMES" => NODE_NAMES }
       end
     end
   end

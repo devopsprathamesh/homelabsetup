@@ -9,7 +9,7 @@ rm -f /tmp/lab_admin_ed25519
 
 # Skip host-key prompts when first connecting to lab nodes (by IP or hostname)
 cat > /home/admin/.ssh/config <<EOF
-Host 192.168.56.* server master1 master2 node1 node2 node3
+Host 192.168.56.* ${NODE_NAMES}
   StrictHostKeyChecking no
   UserKnownHostsFile /dev/null
   User admin

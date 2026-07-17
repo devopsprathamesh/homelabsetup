@@ -50,9 +50,13 @@ if [ -d /etc/ssh/sshd_config.d ]; then
 fi
 systemctl restart ssh
 
-# Trust the shared lab keypair so `server` can SSH in as admin passwordlessly
+# Trust the shared lab keypair so `server` can SSH in as admin passwordlessly,
+# plus the host desktop's own key so you can SSH in directly from there too
 install -d -m 700 -o admin -g admin /home/admin/.ssh
 touch /home/admin/.ssh/authorized_keys
 grep -qxF "$LAB_ADMIN_PUBKEY" /home/admin/.ssh/authorized_keys || echo "$LAB_ADMIN_PUBKEY" >> /home/admin/.ssh/authorized_keys
+if [ -n "${HOST_ADMIN_PUBKEY:-}" ]; then
+  grep -qxF "$HOST_ADMIN_PUBKEY" /home/admin/.ssh/authorized_keys || echo "$HOST_ADMIN_PUBKEY" >> /home/admin/.ssh/authorized_keys
+fi
 chmod 600 /home/admin/.ssh/authorized_keys
 chown admin:admin /home/admin/.ssh/authorized_keys

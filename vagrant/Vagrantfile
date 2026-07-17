@@ -32,6 +32,11 @@ unless File.exist?(PRIVATE_KEY_PATH)
 end
 LAB_ADMIN_PUBKEY = File.read(PUBLIC_KEY_PATH).strip
 
+# The host desktop's own key, so you can `ssh admin@<node>` directly from
+# this machine too, not just from `server`.
+HOST_PUBKEY_PATH = File.expand_path("~/.ssh/id_ed25519.pub")
+HOST_ADMIN_PUBKEY = File.exist?(HOST_PUBKEY_PATH) ? File.read(HOST_PUBKEY_PATH).strip : nil
+
 Vagrant.configure("2") do |config|
   config.vm.box = BOX
   config.vm.box_check_update = false
@@ -51,7 +56,11 @@ Vagrant.configure("2") do |config|
 
       machine.vm.provision "shell",
         path: "scripts/provision-common.sh",
-        env: { "HOSTS_ENTRIES" => HOSTS_ENTRIES, "LAB_ADMIN_PUBKEY" => LAB_ADMIN_PUBKEY }
+        env: {
+          "HOSTS_ENTRIES" => HOSTS_ENTRIES,
+          "LAB_ADMIN_PUBKEY" => LAB_ADMIN_PUBKEY,
+          "HOST_ADMIN_PUBKEY" => HOST_ADMIN_PUBKEY.to_s,
+        }
 
       if node[:name] == "server"
         machine.vm.provision "file",

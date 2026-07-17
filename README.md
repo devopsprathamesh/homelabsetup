@@ -137,6 +137,24 @@ If you ever want a fresh keypair (e.g. suspected compromise), delete
 `vagrant/keys/` and re-run `vagrant provision` on every node — a new key
 will be generated and redistributed automatically.
 
+### Keyless SSH from this desktop
+
+The Vagrantfile also reads `~/.ssh/id_ed25519.pub` on the host (if present)
+and trusts it on every node's `admin` user alongside the lab keypair, so you
+can SSH in directly from this machine too, not just from `server`:
+
+```bash
+ssh admin@lab-server
+ssh admin@lab-master1
+# ...lab-master2, lab-node1, lab-node2, lab-node3
+```
+
+The `lab-*` hostnames are entries this setup added to the desktop's
+`/etc/hosts` (192.168.56.10-15) — prefixed with `lab-` because this host
+already had an unrelated `server` entry (192.168.29.47) that would otherwise
+collide. If you SSH in with a different key than `~/.ssh/id_ed25519`, edit
+`HOST_PUBKEY_PATH` in the Vagrantfile and re-run `vagrant provision`.
+
 ## What you can change
 
 Everything node-related lives in the `NODES` array at the top of the

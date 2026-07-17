@@ -1,0 +1,9 @@
+# Ansible retry files - regenerated per failed run, machine-specific
+*.retry
+
+# Vault password files - never commit secrets
+.vault_pass*
+
+# Local Ansible cache/log
+.ansible/
+*.log

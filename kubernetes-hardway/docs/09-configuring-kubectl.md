@@ -1,6 +1,6 @@
 # 09 — Configuring kubectl for Remote Access
 
-Run on your **client machine** (desktop), inside `~/k8s-the-hard-way`.
+Run on your **client machine** (`server`), inside `~/k8s-the-hard-way`.
 
 This builds a kubeconfig that talks to the cluster through the load
 balancer, using the admin client cert generated in
@@ -12,13 +12,13 @@ each master (used only for local diagnostics on that node).
 LB_IP=192.168.56.10
 
 kubectl config set-cluster kubernetes-the-hard-way \
-  --certificate-authority=ca.pem \
+  --certificate-authority=certificates/ca/ca.pem \
   --embed-certs=true \
   --server=https://${LB_IP}:6443
 
 kubectl config set-credentials admin \
-  --client-certificate=admin.pem \
-  --client-key=admin-key.pem
+  --client-certificate=certificates/admin/admin.pem \
+  --client-key=certificates/admin/admin-key.pem
 
 kubectl config set-context kubernetes-the-hard-way \
   --cluster=kubernetes-the-hard-way \

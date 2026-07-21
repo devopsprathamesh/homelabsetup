@@ -8,10 +8,19 @@ client-cert auth for component-to-apiserver traffic, so the Common Name
 maps to a group — this is what makes RBAC bindings like `system:masters`
 or `system:nodes` work.
 
+Everything here goes under `certificates/`, one subdirectory per component
+(named for what the cert is *for*, e.g. `kube-apiserver/`, even where
+cfssl's own output basename is `kubernetes` because that's the cert's CN)
+rather than dumped flat into the working directory:
+
+```bash
+mkdir -p certificates/{ca,admin,kube-apiserver,kube-controller-manager,kube-proxy,kube-scheduler,service-account,node1,node2,node3}
+```
+
 ## 1. Certificate Authority
 
 ```bash
-cat > ca-csr.json <<'EOF'
+cat > certificates/ca/ca-csr.json <<'EOF'
 {
   "CN": "Kubernetes",
   "key": {"algo": "rsa", "size": 2048},
@@ -21,7 +30,7 @@ cat > ca-csr.json <<'EOF'
 }
 EOF
 
-cat > ca-config.json <<'EOF'
+cat > certificates/ca/ca-config.json <<'EOF'
 {
   "signing": {
     "default": {"expiry": "8760h"},
@@ -35,11 +44,12 @@ cat > ca-config.json <<'EOF'
 }
 EOF
 
-cfssl gencert -initca ca-csr.json | cfssljson -bare ca
+cfssl gencert -initca certificates/ca/ca-csr.json | cfssljson -bare certificates/ca/ca
 ```
 
-This produces `ca-key.pem` (guard this — anyone with it can mint valid
-cluster certs) and `ca.pem` (the public cert, distributed to every node).
+This produces `certificates/ca/ca-key.pem` (guard this — anyone with it
+can mint valid cluster certs) and `certificates/ca/ca.pem` (the public
+cert, distributed to every node).
 
 ## 2. Admin client cert
 
@@ -47,7 +57,7 @@ Used by `kubectl` as the cluster admin. `O: system:masters` binds it to the
 built-in cluster-admin ClusterRole.
 
 ```bash
-cat > admin-csr.json <<'EOF'
+cat > certificates/admin/admin-csr.json <<'EOF'
 {
   "CN": "admin",
   "key": {"algo": "rsa", "size": 2048},
@@ -58,8 +68,8 @@ cat > admin-csr.json <<'EOF'
 EOF
 
 cfssl gencert \
-  -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json \
-  -profile=kubernetes admin-csr.json | cfssljson -bare admin
+  -ca=certificates/ca/ca.pem -ca-key=certificates/ca/ca-key.pem -config=certificates/ca/ca-config.json \
+  -profile=kubernetes certificates/admin/admin-csr.json | cfssljson -bare certificates/admin/admin
 ```
 
 ## 3. Kubelet client certs (one per worker node)
@@ -74,7 +84,7 @@ for i in 1 2 3; do
   ip_var="NODE${i}_IP"
   ip="192.168.56.1$((2+i))"   # node1=.13 node2=.14 node3=.15
 
-cat > ${node}-csr.json <<EOF
+cat > certificates/${node}/${node}-csr.json <<EOF
 {
   "CN": "system:node:${node}",
   "key": {"algo": "rsa", "size": 2048},
@@ -85,16 +95,16 @@ cat > ${node}-csr.json <<EOF
 EOF
 
   cfssl gencert \
-    -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json \
+    -ca=certificates/ca/ca.pem -ca-key=certificates/ca/ca-key.pem -config=certificates/ca/ca-config.json \
     -hostname=${node},lab-${node},${ip} \
-    -profile=kubernetes ${node}-csr.json | cfssljson -bare ${node}
+    -profile=kubernetes certificates/${node}/${node}-csr.json | cfssljson -bare certificates/${node}/${node}
 done
 ```
 
 ## 4. kube-controller-manager, kube-proxy, kube-scheduler client certs
 
 ```bash
-cat > kube-controller-manager-csr.json <<'EOF'
+cat > certificates/kube-controller-manager/kube-controller-manager-csr.json <<'EOF'
 {
   "CN": "system:kube-controller-manager",
   "key": {"algo": "rsa", "size": 2048},
@@ -103,10 +113,10 @@ cat > kube-controller-manager-csr.json <<'EOF'
   ]
 }
 EOF
-cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json \
-  -profile=kubernetes kube-controller-manager-csr.json | cfssljson -bare kube-controller-manager
+cfssl gencert -ca=certificates/ca/ca.pem -ca-key=certificates/ca/ca-key.pem -config=certificates/ca/ca-config.json \
+  -profile=kubernetes certificates/kube-controller-manager/kube-controller-manager-csr.json | cfssljson -bare certificates/kube-controller-manager/kube-controller-manager
 
-cat > kube-proxy-csr.json <<'EOF'
+cat > certificates/kube-proxy/kube-proxy-csr.json <<'EOF'
 {
   "CN": "system:kube-proxy",
   "key": {"algo": "rsa", "size": 2048},
@@ -115,10 +125,10 @@ cat > kube-proxy-csr.json <<'EOF'
   ]
 }
 EOF
-cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json \
-  -profile=kubernetes kube-proxy-csr.json | cfssljson -bare kube-proxy
+cfssl gencert -ca=certificates/ca/ca.pem -ca-key=certificates/ca/ca-key.pem -config=certificates/ca/ca-config.json \
+  -profile=kubernetes certificates/kube-proxy/kube-proxy-csr.json | cfssljson -bare certificates/kube-proxy/kube-proxy
 
-cat > kube-scheduler-csr.json <<'EOF'
+cat > certificates/kube-scheduler/kube-scheduler-csr.json <<'EOF'
 {
   "CN": "system:kube-scheduler",
   "key": {"algo": "rsa", "size": 2048},
@@ -127,8 +137,8 @@ cat > kube-scheduler-csr.json <<'EOF'
   ]
 }
 EOF
-cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json \
-  -profile=kubernetes kube-scheduler-csr.json | cfssljson -bare kube-scheduler
+cfssl gencert -ca=certificates/ca/ca.pem -ca-key=certificates/ca/ca-key.pem -config=certificates/ca/ca-config.json \
+  -profile=kubernetes certificates/kube-scheduler/kube-scheduler-csr.json | cfssljson -bare certificates/kube-scheduler/kube-scheduler
 ```
 
 ## 5. kube-apiserver cert
@@ -139,7 +149,7 @@ a SAN: all three master IPs, the LB IP, the Kubernetes Service cluster IP
 DNS names the `kubernetes` Service resolves to.
 
 ```bash
-cat > kubernetes-csr.json <<'EOF'
+cat > certificates/kube-apiserver/kubernetes-csr.json <<'EOF'
 {
   "CN": "kubernetes",
   "key": {"algo": "rsa", "size": 2048},
@@ -150,10 +160,14 @@ cat > kubernetes-csr.json <<'EOF'
 EOF
 
 cfssl gencert \
-  -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json \
+  -ca=certificates/ca/ca.pem -ca-key=certificates/ca/ca-key.pem -config=certificates/ca/ca-config.json \
   -hostname=10.32.0.1,192.168.56.10,192.168.56.11,192.168.56.12,192.168.56.16,127.0.0.1,lab-server,lab-master1,lab-master2,lab-master3,kubernetes.default \
-  -profile=kubernetes kubernetes-csr.json | cfssljson -bare kubernetes
+  -profile=kubernetes certificates/kube-apiserver/kubernetes-csr.json | cfssljson -bare certificates/kube-apiserver/kubernetes
 ```
+
+(the output files keep the `kubernetes` basename — `kubernetes.pem`/
+`kubernetes-key.pem` — because that's the cert's CN; only the *directory*
+is named for the component that consumes it, `kube-apiserver/`.)
 
 ## 6. Service account key pair
 
@@ -161,7 +175,7 @@ Not a cert — a plain RSA key pair the controller manager uses to sign
 service account tokens, and the API server uses to verify them.
 
 ```bash
-cat > service-account-csr.json <<'EOF'
+cat > certificates/service-account/service-account-csr.json <<'EOF'
 {
   "CN": "service-accounts",
   "key": {"algo": "rsa", "size": 2048},
@@ -172,20 +186,25 @@ cat > service-account-csr.json <<'EOF'
 EOF
 
 cfssl gencert \
-  -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json \
-  -profile=kubernetes service-account-csr.json | cfssljson -bare service-account
+  -ca=certificates/ca/ca.pem -ca-key=certificates/ca/ca-key.pem -config=certificates/ca/ca-config.json \
+  -profile=kubernetes certificates/service-account/service-account-csr.json | cfssljson -bare certificates/service-account/service-account
 ```
 
 ## 7. Distribute certificates
 
+Local paths reflect the `certificates/<component>/` layout above; the
+remote destination stays each node's home directory flat, same as before.
+
 ```bash
 for node in node1 node2 node3; do
-  scp ca.pem ${node}-key.pem ${node}.pem admin@lab-${node}:~/
+  scp certificates/ca/ca.pem certificates/${node}/${node}-key.pem certificates/${node}/${node}.pem \
+      admin@lab-${node}:~/
 done
 
 for master in master1 master2 master3; do
-  scp ca.pem ca-key.pem kubernetes-key.pem kubernetes.pem \
-      service-account-key.pem service-account.pem \
+  scp certificates/ca/ca.pem certificates/ca/ca-key.pem \
+      certificates/kube-apiserver/kubernetes-key.pem certificates/kube-apiserver/kubernetes.pem \
+      certificates/service-account/service-account-key.pem certificates/service-account/service-account.pem \
       admin@lab-${master}:~/
 done
 ```
@@ -197,13 +216,13 @@ kubeconfigs in the next step rather than copied raw.
 **Adding `master3` to an already-running 2-master cluster:** the
 `kubernetes` cert above was just regenerated with `master3`'s IP added to
 its SAN list — that's a *new* cert, not an update to the old one, so
-`master1` and `master2` also need the fresh `kubernetes.pem`/
-`kubernetes-key.pem` copied over (the `for master in ...` loop above
-already covers all three), followed by `sudo systemctl restart
-kube-apiserver` on `master1` and `master2` to pick it up. Skipping this
-leaves the old cert in place there, which lacks `master3`'s SAN — harmless
-for `master1`/`master2` themselves (clients aren't connecting to
-`master3`'s IP through them), but worth doing so all three masters are
-running from the same cert going forward.
+`master1` and `master2` also need the fresh
+`certificates/kube-apiserver/kubernetes.pem`/`kubernetes-key.pem` copied
+over (the `for master in ...` loop above already covers all three),
+followed by `sudo systemctl restart kube-apiserver` on `master1` and
+`master2` to pick it up. Skipping this leaves the old cert in place there,
+which lacks `master3`'s SAN — harmless for `master1`/`master2` themselves
+(clients aren't connecting to `master3`'s IP through them), but worth
+doing so all three masters are running from the same cert going forward.
 
 Next: [03 — Kubernetes Configuration Files](03-kubernetes-configuration-files.md)

@@ -15,6 +15,8 @@ ansible/
   ansible.cfg              # remote_user=admin, points at inventory/hosts.ini
   inventory/
     hosts.ini               # groups: loadbalancer, masters, workers, k8s_cluster
+  playbooks/
+    lab-hostnames.yml       # adds lab-<hostname> aliases to /etc/hosts on every node
 ```
 
 ## Inventory groups
@@ -32,12 +34,11 @@ inventory too so it stays usable if copied elsewhere.
 
 ## Syncing changes to `server`
 
-After editing `inventory/hosts.ini` or `ansible.cfg` here, push them to the
-control node:
+After editing anything here, push the whole directory to the control node
+(simplest way to keep `~/ansible/` on `server` in sync as this grows):
 
 ```bash
-scp ansible.cfg admin@lab-server:~/ansible/ansible.cfg
-scp inventory/hosts.ini admin@lab-server:~/ansible/inventory/hosts.ini
+scp -r ansible.cfg inventory playbooks admin@lab-server:~/ansible/
 ```
 
 ## Usage (on `server`)
@@ -51,4 +52,39 @@ ansible all -m ping          # verify connectivity to every node
 ansible masters -m ping      # target just one group
 ```
 
-No playbooks yet — this is inventory/connectivity only, ready to build on.
+## Playbooks
+
+### `playbooks/lab-hostnames.yml`
+
+Adds a `lab-<hostname>` alias for every node to `/etc/hosts` on **every**
+node (`server`, `master1-3`, `node1-3`) — e.g. `192.168.56.11
+lab-master1` — alongside the plain-name entries Vagrant already put there.
+The `kubernetes-hardway` docs assume these `lab-*` names resolve (e.g.
+`ssh admin@lab-master1`); this is what makes that work when you're driving
+the guide from `server` itself instead of your desktop.
+
+Managed via a marked block (`ansible_managed`-style begin/end comments),
+so it's safe to re-run — it reconciles that one block and never touches
+the Vagrant-managed lines above it.
+
+```bash
+ssh admin@lab-server
+cd ~/ansible
+
+ansible-playbook playbooks/lab-hostnames.yml --diff   # --diff shows what changed
+```
+
+Verify:
+
+```bash
+ansible all -a "getent hosts lab-master1 lab-node1 lab-server"
+```
+
+`vagrant/scripts/provision-common.sh` manages its own separate marked
+block (`# lab-nodes-start` / `# lab-nodes-end`) for the plain-name
+entries and only ever touches that block — so this playbook's block
+survives a normal `vagrant up` *and* an explicit `vagrant provision` on an
+existing VM. Only a full `vagrant destroy` + `vagrant up` rebuilds the VM
+(and its `/etc/hosts`) from scratch, wiping the ansible-managed block too
+— re-run this playbook after that, or after adding a new node to the
+inventory.

@@ -1,0 +1,21 @@
+---
+# Adds "lab-<hostname>" aliases to /etc/hosts on every lab VM, alongside the
+# plain hostnames Vagrant's provisioning already set there (see
+# ../../vagrant/scripts/provision-common.sh). Needed because the
+# kubernetes-hardway docs — and this playbook's own control node, `server` —
+# ssh to nodes as `lab-master1`, `lab-node1`, etc., not by their plain names.
+#
+# Idempotent: re-running just reconciles the same marked block, it never
+# duplicates or touches the Vagrant-managed entries above it.
+- name: Add lab-prefixed hostname aliases to /etc/hosts
+  hosts: all
+  become: true
+  tasks:
+    - name: Manage lab-alias block in /etc/hosts
+      ansible.builtin.blockinfile:
+        path: /etc/hosts
+        marker: "# {mark} lab-prefixed aliases (ansible managed)"
+        block: |
+          {% for host in groups['all'] | sort %}
+          {{ hostvars[host].ansible_host }} lab-{{ host }}
+          {% endfor %}

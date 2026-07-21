@@ -4,7 +4,10 @@ Each node's CNI bridge only knows how to route to pods **on that node**.
 For pod-to-pod traffic across nodes to work, every node needs a static
 route for the other two nodes' pod CIDRs, via that node's private IP —
 normally a cloud provider's VPC router does this automatically; here we do
-it by hand.
+it by hand. (An overlay CNI like Cilium's VXLAN mode makes this whole doc
+unnecessary — see [13 — Migrating to Cilium](13-migrating-to-cilium.md) if
+you go that route later; these routes get removed as part of that
+migration.)
 
 Recall the mapping:
 

@@ -12,6 +12,18 @@ the VMs, so you can re-run the guide) or destroy the VMs entirely.
 Useful if you want to re-run this guide from scratch without waiting for
 `vagrant up` again.
 
+If you followed [13 — Migrating to Cilium](13-migrating-to-cilium.md),
+uninstall it first, from the **client machine**, before tearing down the
+control plane below (Cilium's own cleanup needs a live API server):
+
+```bash
+helm uninstall cilium -n kube-system
+```
+
+Its `cilium_host`/`cilium_net`/`cilium_vxlan` interfaces on each node are
+harmless to leave — they disappear on next reboot, or `sudo ip link
+delete cilium_vxlan cilium_host 2>/dev/null || true` clears them sooner.
+
 **Run on:** `master1`, `master2`, `master3` — repeat on each.
 
 ```bash

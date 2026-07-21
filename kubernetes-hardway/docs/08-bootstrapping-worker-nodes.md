@@ -74,7 +74,10 @@ This is the "hard way" CNI setup: a plain `bridge` + `host-local` IPAM
 plugin per node, each owning a distinct `/24` out of the overall
 `10.200.0.0/16` pod network. There's no overlay and no cross-node route
 propagation daemon — that gap gets closed manually in
-[10 — Pod Network Routes](10-pod-network-routes.md).
+[10 — Pod Network Routes](10-pod-network-routes.md). (This whole setup —
+this section, §8 below, and doc 10 — gets replaced if you later follow
+[13 — Migrating to Cilium](13-migrating-to-cilium.md); nothing wasted by
+building it by hand here first.)
 
 ```bash
 cat <<EOF | sudo tee /etc/cni/net.d/10-bridge.conf

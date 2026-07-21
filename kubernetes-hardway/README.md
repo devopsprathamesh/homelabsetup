@@ -84,6 +84,8 @@ mid-guide.
 10. [Pod Network Routes](docs/10-pod-network-routes.md) — static routing between node CIDRs
 11. [DNS Cluster Add-on](docs/11-dns-cluster-addon.md) — CoreDNS
 12. [Smoke Test](docs/12-smoke-test.md) — prove it all works
+13. [Migrating to Cilium](docs/13-migrating-to-cilium.md) — optional, swaps
+    the hand-rolled CNI/kube-proxy setup for Cilium + Hubble
 14. [High Availability Deep Dive](docs/14-ha-deep-dive.md) — explore why the
     cluster survives what it survives, and where that stops
 15. Disaster Recovery — etcd snapshot/restore, quorum loss with real data

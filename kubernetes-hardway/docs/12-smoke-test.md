@@ -131,5 +131,8 @@ If everything above passed, the cluster is fully functional end to end.
 
 Next: [14 — High Availability Deep Dive](14-ha-deep-dive.md) to actually
 explore *why* it survives what it survives, rather than just confirming
-that it does. [16 — Cleanup](16-cleanup.md) is there whenever you're done
-experimenting, not a required next step.
+that it does. If you'd rather swap the hand-rolled CNI/kube-proxy setup
+for Cilium + Hubble first, that's
+[13 — Migrating to Cilium](13-migrating-to-cilium.md) — optional, and
+13/14 don't depend on each other either order. [16 — Cleanup](16-cleanup.md)
+is there whenever you're done experimenting, not a required next step.

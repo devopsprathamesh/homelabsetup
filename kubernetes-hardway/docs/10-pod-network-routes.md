@@ -45,15 +45,19 @@ sudo ip route add 10.200.2.0/24 via 192.168.56.15
 ```
 
 These `ip route add` commands are **not persistent** across reboot. Make
-them permanent with netplan (Ubuntu 24.04's default network manager):
+them permanent with netplan (Ubuntu 24.04's default network manager).
+This lab's VMs use predictable interface naming — `enp0s3` is the NAT
+adapter (internet access), `enp0s8` is the host-only `192.168.56.0/24`
+adapter these routes need — confirm with `ip addr show enp0s8` before
+running any of these if you're not sure:
 
 ```bash
-# Example for node1 — adjust routes-to per host as above
+# node1
 cat <<'EOF' | sudo tee /etc/netplan/90-pod-routes.yaml
 network:
   version: 2
   ethernets:
-    eth1:
+    enp0s8:
       routes:
         - to: 10.200.1.0/24
           via: 192.168.56.14
@@ -64,10 +68,62 @@ sudo chmod 600 /etc/netplan/90-pod-routes.yaml
 sudo netplan apply
 ```
 
-Check `ip addr` first to confirm `eth1` is actually the host-only
-`192.168.56.0/24` interface on your VM (Vagrant's private network adapter
-is usually the second interface — `eth0` is typically the NAT adapter used
-for internet access).
+```bash
+# node2
+cat <<'EOF' | sudo tee /etc/netplan/90-pod-routes.yaml
+network:
+  version: 2
+  ethernets:
+    enp0s8:
+      routes:
+        - to: 10.200.0.0/24
+          via: 192.168.56.13
+        - to: 10.200.2.0/24
+          via: 192.168.56.15
+EOF
+sudo chmod 600 /etc/netplan/90-pod-routes.yaml
+sudo netplan apply
+```
+
+```bash
+# node3
+cat <<'EOF' | sudo tee /etc/netplan/90-pod-routes.yaml
+network:
+  version: 2
+  ethernets:
+    enp0s8:
+      routes:
+        - to: 10.200.0.0/24
+          via: 192.168.56.13
+        - to: 10.200.1.0/24
+          via: 192.168.56.14
+EOF
+sudo chmod 600 /etc/netplan/90-pod-routes.yaml
+sudo netplan apply
+```
+
+`master1`, `master2`, `master3`, and `server` all need routes to *all
+three* pod CIDRs (none of them own one to exclude), so this same file
+goes on all four unchanged:
+
+```bash
+# master1, master2, master3, and server — identical on all four
+cat <<'EOF' | sudo tee /etc/netplan/90-pod-routes.yaml
+network:
+  version: 2
+  ethernets:
+    enp0s8:
+      routes:
+        - to: 10.200.0.0/24
+          via: 192.168.56.13
+        - to: 10.200.1.0/24
+          via: 192.168.56.14
+        - to: 10.200.2.0/24
+          via: 192.168.56.15
+EOF
+sudo chmod 600 /etc/netplan/90-pod-routes.yaml
+sudo netplan apply
+```
 
 ## Verify
 
@@ -77,7 +133,7 @@ exist):
 
 ```bash
 ip route get 10.200.1.5
-# should show: via 192.168.56.14 dev eth1 ...
+# should show: via 192.168.56.14 dev enp0s8 ...
 ```
 
 A full end-to-end check happens in [12 — Smoke Test](12-smoke-test.md)

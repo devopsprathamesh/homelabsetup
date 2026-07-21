@@ -192,20 +192,29 @@ cfssl gencert \
 
 ## 7. Distribute certificates
 
-Local paths reflect the `certificates/<component>/` layout above; the
-remote destination stays each node's home directory flat, same as before.
+Each node gets the same `certificates/<component>/` layout under its own
+`~/k8s-the-hard-way`, not a flat home directory — `mkdir -p` the remote
+subdirectories first (`scp` doesn't create missing directories), then copy
+each component's files into its matching remote subdirectory. Workers only
+ever receive `ca.pem`, never `ca-key.pem` (the CA private key stays on the
+client machine and the masters that need it for signing).
 
 ```bash
 for node in node1 node2 node3; do
-  scp certificates/ca/ca.pem certificates/${node}/${node}-key.pem certificates/${node}/${node}.pem \
-      admin@lab-${node}:~/
+  ssh admin@lab-${node} "mkdir -p ~/k8s-the-hard-way/certificates/ca ~/k8s-the-hard-way/certificates/${node}"
+  scp certificates/ca/ca.pem admin@lab-${node}:~/k8s-the-hard-way/certificates/ca/
+  scp certificates/${node}/${node}-key.pem certificates/${node}/${node}.pem \
+      admin@lab-${node}:~/k8s-the-hard-way/certificates/${node}/
 done
 
 for master in master1 master2 master3; do
+  ssh admin@lab-${master} "mkdir -p ~/k8s-the-hard-way/certificates/ca ~/k8s-the-hard-way/certificates/kube-apiserver ~/k8s-the-hard-way/certificates/service-account"
   scp certificates/ca/ca.pem certificates/ca/ca-key.pem \
-      certificates/kube-apiserver/kubernetes-key.pem certificates/kube-apiserver/kubernetes.pem \
-      certificates/service-account/service-account-key.pem certificates/service-account/service-account.pem \
-      admin@lab-${master}:~/
+      admin@lab-${master}:~/k8s-the-hard-way/certificates/ca/
+  scp certificates/kube-apiserver/kubernetes-key.pem certificates/kube-apiserver/kubernetes.pem \
+      admin@lab-${master}:~/k8s-the-hard-way/certificates/kube-apiserver/
+  scp certificates/service-account/service-account-key.pem certificates/service-account/service-account.pem \
+      admin@lab-${master}:~/k8s-the-hard-way/certificates/service-account/
 done
 ```
 

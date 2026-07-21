@@ -8,12 +8,12 @@ to the API server. Worker-facing kubeconfigs point at the **load balancer**
 (`192.168.56.10:6443`), not at either master directly, so they keep working
 if one control-plane node goes down.
 
-Kubeconfigs go in their own `kubeconfigs/` directory (siblings of
+Kubeconfigs go in their own `kubeconfig/` directory (siblings of
 `certificates/` from [02](02-certificate-authority.md)), not mixed in with
 the certs they embed:
 
 ```bash
-mkdir -p kubeconfigs
+mkdir -p kubeconfig
 LB_IP=192.168.56.10
 ```
 
@@ -27,20 +27,20 @@ for i in 1 2 3; do
     --certificate-authority=certificates/ca/ca.pem \
     --embed-certs=true \
     --server=https://${LB_IP}:6443 \
-    --kubeconfig=kubeconfigs/${node}.kubeconfig
+    --kubeconfig=kubeconfig/${node}.kubeconfig
 
   kubectl config set-credentials system:node:${node} \
     --client-certificate=certificates/${node}/${node}.pem \
     --client-key=certificates/${node}/${node}-key.pem \
     --embed-certs=true \
-    --kubeconfig=kubeconfigs/${node}.kubeconfig
+    --kubeconfig=kubeconfig/${node}.kubeconfig
 
   kubectl config set-context default \
     --cluster=kubernetes-the-hard-way \
     --user=system:node:${node} \
-    --kubeconfig=kubeconfigs/${node}.kubeconfig
+    --kubeconfig=kubeconfig/${node}.kubeconfig
 
-  kubectl config use-context default --kubeconfig=kubeconfigs/${node}.kubeconfig
+  kubectl config use-context default --kubeconfig=kubeconfig/${node}.kubeconfig
 done
 ```
 
@@ -51,20 +51,20 @@ kubectl config set-cluster kubernetes-the-hard-way \
   --certificate-authority=certificates/ca/ca.pem \
   --embed-certs=true \
   --server=https://${LB_IP}:6443 \
-  --kubeconfig=kubeconfigs/kube-proxy.kubeconfig
+  --kubeconfig=kubeconfig/kube-proxy.kubeconfig
 
 kubectl config set-credentials system:kube-proxy \
   --client-certificate=certificates/kube-proxy/kube-proxy.pem \
   --client-key=certificates/kube-proxy/kube-proxy-key.pem \
   --embed-certs=true \
-  --kubeconfig=kubeconfigs/kube-proxy.kubeconfig
+  --kubeconfig=kubeconfig/kube-proxy.kubeconfig
 
 kubectl config set-context default \
   --cluster=kubernetes-the-hard-way \
   --user=system:kube-proxy \
-  --kubeconfig=kubeconfigs/kube-proxy.kubeconfig
+  --kubeconfig=kubeconfig/kube-proxy.kubeconfig
 
-kubectl config use-context default --kubeconfig=kubeconfigs/kube-proxy.kubeconfig
+kubectl config use-context default --kubeconfig=kubeconfig/kube-proxy.kubeconfig
 ```
 
 ## 3. kube-controller-manager kubeconfig
@@ -78,20 +78,20 @@ kubectl config set-cluster kubernetes-the-hard-way \
   --certificate-authority=certificates/ca/ca.pem \
   --embed-certs=true \
   --server=https://127.0.0.1:6443 \
-  --kubeconfig=kubeconfigs/kube-controller-manager.kubeconfig
+  --kubeconfig=kubeconfig/kube-controller-manager.kubeconfig
 
 kubectl config set-credentials system:kube-controller-manager \
   --client-certificate=certificates/kube-controller-manager/kube-controller-manager.pem \
   --client-key=certificates/kube-controller-manager/kube-controller-manager-key.pem \
   --embed-certs=true \
-  --kubeconfig=kubeconfigs/kube-controller-manager.kubeconfig
+  --kubeconfig=kubeconfig/kube-controller-manager.kubeconfig
 
 kubectl config set-context default \
   --cluster=kubernetes-the-hard-way \
   --user=system:kube-controller-manager \
-  --kubeconfig=kubeconfigs/kube-controller-manager.kubeconfig
+  --kubeconfig=kubeconfig/kube-controller-manager.kubeconfig
 
-kubectl config use-context default --kubeconfig=kubeconfigs/kube-controller-manager.kubeconfig
+kubectl config use-context default --kubeconfig=kubeconfig/kube-controller-manager.kubeconfig
 ```
 
 ## 4. kube-scheduler kubeconfig
@@ -103,20 +103,20 @@ kubectl config set-cluster kubernetes-the-hard-way \
   --certificate-authority=certificates/ca/ca.pem \
   --embed-certs=true \
   --server=https://127.0.0.1:6443 \
-  --kubeconfig=kubeconfigs/kube-scheduler.kubeconfig
+  --kubeconfig=kubeconfig/kube-scheduler.kubeconfig
 
 kubectl config set-credentials system:kube-scheduler \
   --client-certificate=certificates/kube-scheduler/kube-scheduler.pem \
   --client-key=certificates/kube-scheduler/kube-scheduler-key.pem \
   --embed-certs=true \
-  --kubeconfig=kubeconfigs/kube-scheduler.kubeconfig
+  --kubeconfig=kubeconfig/kube-scheduler.kubeconfig
 
 kubectl config set-context default \
   --cluster=kubernetes-the-hard-way \
   --user=system:kube-scheduler \
-  --kubeconfig=kubeconfigs/kube-scheduler.kubeconfig
+  --kubeconfig=kubeconfig/kube-scheduler.kubeconfig
 
-kubectl config use-context default --kubeconfig=kubeconfigs/kube-scheduler.kubeconfig
+kubectl config use-context default --kubeconfig=kubeconfig/kube-scheduler.kubeconfig
 ```
 
 ## 5. admin kubeconfig
@@ -130,32 +130,35 @@ kubectl config set-cluster kubernetes-the-hard-way \
   --certificate-authority=certificates/ca/ca.pem \
   --embed-certs=true \
   --server=https://127.0.0.1:6443 \
-  --kubeconfig=kubeconfigs/admin.kubeconfig
+  --kubeconfig=kubeconfig/admin.kubeconfig
 
 kubectl config set-credentials admin \
   --client-certificate=certificates/admin/admin.pem \
   --client-key=certificates/admin/admin-key.pem \
   --embed-certs=true \
-  --kubeconfig=kubeconfigs/admin.kubeconfig
+  --kubeconfig=kubeconfig/admin.kubeconfig
 
 kubectl config set-context default \
   --cluster=kubernetes-the-hard-way \
   --user=admin \
-  --kubeconfig=kubeconfigs/admin.kubeconfig
+  --kubeconfig=kubeconfig/admin.kubeconfig
 
-kubectl config use-context default --kubeconfig=kubeconfigs/admin.kubeconfig
+kubectl config use-context default --kubeconfig=kubeconfig/admin.kubeconfig
 ```
 
 ## 6. Distribute kubeconfigs
 
 ```bash
 for node in node1 node2 node3; do
-  scp kubeconfigs/${node}.kubeconfig kubeconfigs/kube-proxy.kubeconfig admin@lab-${node}:~/
+  ssh admin@lab-${node} "mkdir -p ~/k8s-the-hard-way/kubeconfig"
+  scp kubeconfig/${node}.kubeconfig kubeconfig/kube-proxy.kubeconfig \
+      admin@lab-${node}:~/k8s-the-hard-way/kubeconfig/
 done
 
 for master in master1 master2 master3; do
-  scp kubeconfigs/admin.kubeconfig kubeconfigs/kube-controller-manager.kubeconfig kubeconfigs/kube-scheduler.kubeconfig \
-      admin@lab-${master}:~/
+  ssh admin@lab-${master} "mkdir -p ~/k8s-the-hard-way/kubeconfig"
+  scp kubeconfig/admin.kubeconfig kubeconfig/kube-controller-manager.kubeconfig kubeconfig/kube-scheduler.kubeconfig \
+      admin@lab-${master}:~/k8s-the-hard-way/kubeconfig/
 done
 ```
 

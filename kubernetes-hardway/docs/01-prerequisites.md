@@ -108,10 +108,11 @@ Within it, certs and kubeconfigs are kept apart rather than dumped flat:
 [02](02-certificate-authority.md) creates `certificates/<component>/`
 (one subdirectory per component — `certificates/ca/`,
 `certificates/admin/`, `certificates/kube-apiserver/`, etc.), and
-[03](03-kubernetes-configuration-files.md) creates a flat `kubeconfigs/`
-directory alongside it. This only applies to the client machine's own
-scratch directory — files distributed out to `master*`/`node*` via `scp`
-still land flat in each node's home directory, unchanged.
+[03](03-kubernetes-configuration-files.md) creates a flat `kubeconfig/`
+directory alongside it. This same layout (`certificates/<component>/`,
+`kubeconfig/`) also gets recreated on each `master*`/`node*` as files are
+`scp`'d out — see the "Distribute" steps in 02/03 and the note in
+[16 — Cleanup](16-cleanup.md).
 
 ## 5. Node/IP reference
 

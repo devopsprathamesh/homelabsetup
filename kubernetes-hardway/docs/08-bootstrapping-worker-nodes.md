@@ -148,9 +148,10 @@ EOF
 ```bash
 NODE_NAME=node1   # node2 / node3 on those hosts
 
-sudo cp ${NODE_NAME}-key.pem ${NODE_NAME}.pem /var/lib/kubelet/
-sudo cp ${NODE_NAME}.kubeconfig /var/lib/kubelet/kubeconfig
-sudo cp ca.pem /var/lib/kubernetes/
+sudo cp ~/k8s-the-hard-way/certificates/${NODE_NAME}/${NODE_NAME}-key.pem \
+        ~/k8s-the-hard-way/certificates/${NODE_NAME}/${NODE_NAME}.pem /var/lib/kubelet/
+sudo cp ~/k8s-the-hard-way/kubeconfig/${NODE_NAME}.kubeconfig /var/lib/kubelet/kubeconfig
+sudo cp ~/k8s-the-hard-way/certificates/ca/ca.pem /var/lib/kubernetes/
 
 cat <<EOF | sudo tee /var/lib/kubelet/kubelet-config.yaml
 kind: KubeletConfiguration
@@ -218,7 +219,7 @@ this lab needs it; leave both flags out.
 ## 8. Configure kube-proxy
 
 ```bash
-sudo cp kube-proxy.kubeconfig /var/lib/kube-proxy/kubeconfig
+sudo cp ~/k8s-the-hard-way/kubeconfig/kube-proxy.kubeconfig /var/lib/kube-proxy/kubeconfig
 
 cat <<EOF | sudo tee /var/lib/kube-proxy/kube-proxy-config.yaml
 kind: KubeProxyConfiguration
@@ -264,12 +265,12 @@ make sure you're using each node's own files, not another node's.
 
 ## 11. Verify
 
-**Run on:** any master (using its local `admin.kubeconfig` from
-[03](03-kubernetes-configuration-files.md)), or the client machine once
+**Run on:** any master (using its local `~/k8s-the-hard-way/kubeconfig/admin.kubeconfig`
+from [03](03-kubernetes-configuration-files.md)), or the client machine once
 [09](09-configuring-kubectl.md) is done.
 
 ```bash
-kubectl get nodes --kubeconfig admin.kubeconfig
+kubectl get nodes --kubeconfig ~/k8s-the-hard-way/kubeconfig/admin.kubeconfig
 ```
 
 Expect `node1`, `node2`, `node3` listed with `STATUS Ready` (may take

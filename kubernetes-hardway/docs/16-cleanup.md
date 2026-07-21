@@ -19,7 +19,7 @@ sudo systemctl stop kube-apiserver kube-controller-manager kube-scheduler etcd
 sudo systemctl disable kube-apiserver kube-controller-manager kube-scheduler etcd
 sudo rm -rf /var/lib/kubernetes /var/lib/etcd /etc/etcd /etc/kubernetes
 sudo rm -f /etc/systemd/system/{kube-apiserver,kube-controller-manager,kube-scheduler,etcd}.service
-sudo rm -f ~/*.pem ~/*.kubeconfig ~/encryption-config.yaml
+rm -rf ~/k8s-the-hard-way
 sudo systemctl daemon-reload
 ```
 
@@ -31,7 +31,7 @@ sudo systemctl disable kubelet kube-proxy containerd
 sudo rm -rf /var/lib/kubelet /var/lib/kube-proxy /var/lib/kubernetes \
             /etc/cni /opt/cni /var/lib/containerd /etc/containerd
 sudo rm -f /etc/systemd/system/{kubelet,kube-proxy,containerd}.service
-sudo rm -f ~/*.pem ~/*.kubeconfig
+rm -rf ~/k8s-the-hard-way
 sudo systemctl daemon-reload
 sudo ip link delete cnio0 2>/dev/null || true
 ```

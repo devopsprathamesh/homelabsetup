@@ -31,9 +31,10 @@ sudo mv kube-apiserver kube-controller-manager kube-scheduler kubectl /usr/local
 ```bash
 sudo mkdir -p /var/lib/kubernetes/
 
-sudo cp ca.pem ca-key.pem kubernetes-key.pem kubernetes.pem \
-  service-account-key.pem service-account.pem \
-  encryption-config.yaml /var/lib/kubernetes/
+sudo cp ~/k8s-the-hard-way/certificates/ca/ca.pem ~/k8s-the-hard-way/certificates/ca/ca-key.pem \
+  ~/k8s-the-hard-way/certificates/kube-apiserver/kubernetes-key.pem ~/k8s-the-hard-way/certificates/kube-apiserver/kubernetes.pem \
+  ~/k8s-the-hard-way/certificates/service-account/service-account-key.pem ~/k8s-the-hard-way/certificates/service-account/service-account.pem \
+  ~/k8s-the-hard-way/encryption-config.yaml /var/lib/kubernetes/
 ```
 
 Set this node's own IP (run on each node with its own value):
@@ -100,7 +101,7 @@ actually reach the API through.
 ## 3. Configure kube-controller-manager
 
 ```bash
-sudo cp kube-controller-manager.kubeconfig /var/lib/kubernetes/
+sudo cp ~/k8s-the-hard-way/kubeconfig/kube-controller-manager.kubeconfig /var/lib/kubernetes/
 
 cat <<EOF | sudo tee /etc/systemd/system/kube-controller-manager.service
 [Unit]
@@ -136,7 +137,7 @@ in the API server.
 ## 4. Configure kube-scheduler
 
 ```bash
-sudo cp kube-scheduler.kubeconfig /var/lib/kubernetes/
+sudo cp ~/k8s-the-hard-way/kubeconfig/kube-scheduler.kubeconfig /var/lib/kubernetes/
 
 cat <<EOF | sudo tee /etc/kubernetes/config/kube-scheduler.yaml
 apiVersion: kubescheduler.config.k8s.io/v1
@@ -180,8 +181,8 @@ sudo systemctl status kube-apiserver kube-controller-manager kube-scheduler --no
 **Run on:** any one of `master1`/`master2`/`master3`.
 
 ```bash
-sudo cp admin.kubeconfig /var/lib/kubernetes/ 2>/dev/null || true
-kubectl get componentstatuses --kubeconfig admin.kubeconfig
+sudo cp ~/k8s-the-hard-way/kubeconfig/admin.kubeconfig /var/lib/kubernetes/ 2>/dev/null || true
+kubectl get componentstatuses --kubeconfig ~/k8s-the-hard-way/kubeconfig/admin.kubeconfig
 curl -k https://127.0.0.1:6443/version
 ```
 
@@ -210,7 +211,7 @@ port-forward) — otherwise `kubectl logs`/`exec` will fail even though
 everything else works.
 
 ```bash
-cat <<EOF | kubectl apply --kubeconfig admin.kubeconfig -f -
+cat <<EOF | kubectl apply --kubeconfig ~/k8s-the-hard-way/kubeconfig/admin.kubeconfig -f -
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:

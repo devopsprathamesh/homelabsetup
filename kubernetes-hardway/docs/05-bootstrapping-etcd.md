@@ -36,7 +36,10 @@ etcd --version
 ```bash
 sudo mkdir -p /etc/etcd /var/lib/etcd
 sudo chmod 700 /var/lib/etcd
-sudo cp ca.pem kubernetes-key.pem kubernetes.pem /etc/etcd/
+sudo cp ~/k8s-the-hard-way/certificates/ca/ca.pem \
+        ~/k8s-the-hard-way/certificates/kube-apiserver/kubernetes-key.pem \
+        ~/k8s-the-hard-way/certificates/kube-apiserver/kubernetes.pem \
+        /etc/etcd/
 ```
 
 Set this node's own IP and name (run on each node with its own values):

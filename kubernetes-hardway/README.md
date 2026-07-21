@@ -88,8 +88,9 @@ mid-guide.
     the hand-rolled CNI/kube-proxy setup for Cilium + Hubble
 14. [High Availability Deep Dive](docs/14-ha-deep-dive.md) — explore why the
     cluster survives what it survives, and where that stops
-15. Disaster Recovery — etcd snapshot/restore, quorum loss with real data
-    loss, rebuilding a master from nothing (not written yet; builds on 14)
+15. [Disaster Recovery](docs/15-disaster-recovery.md) — etcd
+    snapshot/restore, quorum loss with real data loss, rebuilding a master
+    from nothing (builds on 14)
 16. [Cleanup](docs/16-cleanup.md) — tear down / reset, once you're actually
     done exploring
 

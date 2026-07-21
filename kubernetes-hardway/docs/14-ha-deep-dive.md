@@ -146,8 +146,9 @@ kubectl get nodes    # back immediately once quorum re-forms
 the data came back the moment the processes did. Real disaster recovery is
 what you need when that data directory is gone (disk failure, `rm -rf`
 gone wrong, all 3 members lost at once) — no amount of `systemctl start`
-fixes that; you need a snapshot restore. That's the subject of the
-disaster-recovery doc, once you've internalized this boundary.
+fixes that; you need a snapshot restore. That's the subject of
+[15 — Disaster Recovery](15-disaster-recovery.md), once you've
+internalized this boundary.
 
 ## 6. Worker-side HA: Deployments vs. bare Pods
 
@@ -218,7 +219,6 @@ specific reason it's recoverable without a restore), worker-node loss with
 and without a controller, and the LB's own single point of failure. That's
 the complete HA picture for this lab.
 
-Next: disaster recovery (etcd snapshot/restore, full quorum loss *with*
-data loss, rebuilding a master from nothing) builds directly on §5 above —
-ask when you're ready to start that module and it'll land as
-`15-disaster-recovery.md`.
+Next: [15 — Disaster Recovery](15-disaster-recovery.md) (etcd
+snapshot/restore, full quorum loss *with* data loss, rebuilding a master
+from nothing) builds directly on §5 above.

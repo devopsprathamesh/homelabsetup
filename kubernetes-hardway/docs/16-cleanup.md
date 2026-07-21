@@ -2,10 +2,11 @@
 
 The true last step — run this once you're actually done exploring, not
 right after [12](12-smoke-test.md). The whole point of
-[14 — HA Deep Dive](14-ha-deep-dive.md) and the disaster-recovery module
-after it is to keep breaking and un-breaking this same cluster; tearing it
-down here throws that lab away. Two levels: reset just Kubernetes (keep
-the VMs, so you can re-run the guide) or destroy the VMs entirely.
+[14 — HA Deep Dive](14-ha-deep-dive.md) and
+[15 — Disaster Recovery](15-disaster-recovery.md) after it is to keep
+breaking and un-breaking this same cluster; tearing it down here throws
+that lab away. Two levels: reset just Kubernetes (keep the VMs, so you
+can re-run the guide) or destroy the VMs entirely.
 
 ## Option A — Reset Kubernetes, keep the VMs
 

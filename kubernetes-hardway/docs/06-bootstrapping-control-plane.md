@@ -31,10 +31,10 @@ sudo mv kube-apiserver kube-controller-manager kube-scheduler kubectl /usr/local
 ```bash
 sudo mkdir -p /var/lib/kubernetes/
 
-sudo cp ~/k8s-the-hard-way/certificates/ca/ca.pem ~/k8s-the-hard-way/certificates/ca/ca-key.pem \
-  ~/k8s-the-hard-way/certificates/kube-apiserver/kubernetes-key.pem ~/k8s-the-hard-way/certificates/kube-apiserver/kubernetes.pem \
-  ~/k8s-the-hard-way/certificates/service-account/service-account-key.pem ~/k8s-the-hard-way/certificates/service-account/service-account.pem \
-  ~/k8s-the-hard-way/encryption-config.yaml /var/lib/kubernetes/
+sudo cp ~/k8s-the-hard-way/certificates/ca.pem ~/k8s-the-hard-way/certificates/ca-key.pem \
+  ~/k8s-the-hard-way/certificates/kubernetes-key.pem ~/k8s-the-hard-way/certificates/kubernetes.pem \
+  ~/k8s-the-hard-way/certificates/service-account-key.pem ~/k8s-the-hard-way/certificates/service-account.pem \
+  ~/k8s-the-hard-way/encryptionkey/encryption-config.yaml /var/lib/kubernetes/
 ```
 
 Set this node's own IP (run on each node with its own value):

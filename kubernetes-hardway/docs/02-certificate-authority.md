@@ -192,29 +192,27 @@ cfssl gencert \
 
 ## 7. Distribute certificates
 
-Each node gets the same `certificates/<component>/` layout under its own
-`~/k8s-the-hard-way`, not a flat home directory — `mkdir -p` the remote
-subdirectories first (`scp` doesn't create missing directories), then copy
-each component's files into its matching remote subdirectory. Workers only
-ever receive `ca.pem`, never `ca-key.pem` (the CA private key stays on the
-client machine and the masters that need it for signing).
+Unlike the client machine's `certificates/<component>/` split (useful
+there since every component's cert gets generated in one place), each
+node only ever receives a handful of files, so they land flat in a single
+`~/k8s-the-hard-way/certificates/` — `mkdir -p` it first (`scp` doesn't
+create missing directories). Workers only ever receive `ca.pem`, never
+`ca-key.pem` (the CA private key stays on the client machine and the
+masters that need it for signing).
 
 ```bash
 for node in node1 node2 node3; do
-  ssh admin@lab-${node} "mkdir -p ~/k8s-the-hard-way/certificates/ca ~/k8s-the-hard-way/certificates/${node}"
-  scp certificates/ca/ca.pem admin@lab-${node}:~/k8s-the-hard-way/certificates/ca/
-  scp certificates/${node}/${node}-key.pem certificates/${node}/${node}.pem \
-      admin@lab-${node}:~/k8s-the-hard-way/certificates/${node}/
+  ssh admin@lab-${node} "mkdir -p ~/k8s-the-hard-way/certificates"
+  scp certificates/ca/ca.pem certificates/${node}/${node}-key.pem certificates/${node}/${node}.pem \
+      admin@lab-${node}:~/k8s-the-hard-way/certificates/
 done
 
 for master in master1 master2 master3; do
-  ssh admin@lab-${master} "mkdir -p ~/k8s-the-hard-way/certificates/ca ~/k8s-the-hard-way/certificates/kube-apiserver ~/k8s-the-hard-way/certificates/service-account"
+  ssh admin@lab-${master} "mkdir -p ~/k8s-the-hard-way/certificates"
   scp certificates/ca/ca.pem certificates/ca/ca-key.pem \
-      admin@lab-${master}:~/k8s-the-hard-way/certificates/ca/
-  scp certificates/kube-apiserver/kubernetes-key.pem certificates/kube-apiserver/kubernetes.pem \
-      admin@lab-${master}:~/k8s-the-hard-way/certificates/kube-apiserver/
-  scp certificates/service-account/service-account-key.pem certificates/service-account/service-account.pem \
-      admin@lab-${master}:~/k8s-the-hard-way/certificates/service-account/
+      certificates/kube-apiserver/kubernetes-key.pem certificates/kube-apiserver/kubernetes.pem \
+      certificates/service-account/service-account-key.pem certificates/service-account/service-account.pem \
+      admin@lab-${master}:~/k8s-the-hard-way/certificates/
 done
 ```
 

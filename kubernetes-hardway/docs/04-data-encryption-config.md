@@ -32,14 +32,14 @@ here, not the older `EncryptionConfig`/`v1` you'll see in some tutorials —
 that legacy pair still decodes today only because apiserver keeps a
 backward-compat alias for it, not because it's the current API.
 
-Distribute to all three control-plane nodes (into the same
-`~/k8s-the-hard-way` used for certs/kubeconfigs, not the bare home
-directory):
+Distribute to all three control-plane nodes, into its own `encryptionkey/`
+subdirectory under `~/k8s-the-hard-way` (kept separate from `certificates/`
+and `kubeconfig/` since it's neither):
 
 ```bash
 for master in master1 master2 master3; do
-  ssh admin@lab-${master} "mkdir -p ~/k8s-the-hard-way"
-  scp encryption-config.yaml admin@lab-${master}:~/k8s-the-hard-way/
+  ssh admin@lab-${master} "mkdir -p ~/k8s-the-hard-way/encryptionkey"
+  scp encryption-config.yaml admin@lab-${master}:~/k8s-the-hard-way/encryptionkey/
 done
 ```
 

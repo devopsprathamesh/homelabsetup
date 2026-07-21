@@ -36,9 +36,9 @@ etcd --version
 ```bash
 sudo mkdir -p /etc/etcd /var/lib/etcd
 sudo chmod 700 /var/lib/etcd
-sudo cp ~/k8s-the-hard-way/certificates/ca/ca.pem \
-        ~/k8s-the-hard-way/certificates/kube-apiserver/kubernetes-key.pem \
-        ~/k8s-the-hard-way/certificates/kube-apiserver/kubernetes.pem \
+sudo cp ~/k8s-the-hard-way/certificates/ca.pem \
+        ~/k8s-the-hard-way/certificates/kubernetes-key.pem \
+        ~/k8s-the-hard-way/certificates/kubernetes.pem \
         /etc/etcd/
 ```
 

@@ -148,10 +148,10 @@ EOF
 ```bash
 NODE_NAME=node1   # node2 / node3 on those hosts
 
-sudo cp ~/k8s-the-hard-way/certificates/${NODE_NAME}/${NODE_NAME}-key.pem \
-        ~/k8s-the-hard-way/certificates/${NODE_NAME}/${NODE_NAME}.pem /var/lib/kubelet/
+sudo cp ~/k8s-the-hard-way/certificates/${NODE_NAME}-key.pem \
+        ~/k8s-the-hard-way/certificates/${NODE_NAME}.pem /var/lib/kubelet/
 sudo cp ~/k8s-the-hard-way/kubeconfig/${NODE_NAME}.kubeconfig /var/lib/kubelet/kubeconfig
-sudo cp ~/k8s-the-hard-way/certificates/ca/ca.pem /var/lib/kubernetes/
+sudo cp ~/k8s-the-hard-way/certificates/ca.pem /var/lib/kubernetes/
 
 cat <<EOF | sudo tee /var/lib/kubelet/kubelet-config.yaml
 kind: KubeletConfiguration

@@ -107,11 +107,17 @@ sections from inside `~/k8s-the-hard-way` unless stated otherwise.
 Within it, certs and kubeconfigs are kept apart rather than dumped flat:
 [02](02-certificate-authority.md) creates `certificates/<component>/`
 (one subdirectory per component — `certificates/ca/`,
-`certificates/admin/`, `certificates/kube-apiserver/`, etc.), and
+`certificates/admin/`, `certificates/kube-apiserver/`, etc. — since every
+component's cert gets generated here in one place), and
 [03](03-kubernetes-configuration-files.md) creates a flat `kubeconfig/`
-directory alongside it. This same layout (`certificates/<component>/`,
-`kubeconfig/`) also gets recreated on each `master*`/`node*` as files are
-`scp`'d out — see the "Distribute" steps in 02/03 and the note in
+directory alongside it.
+
+Each `master*`/`node*` gets its own `~/k8s-the-hard-way` too, as files are
+`scp`'d out, but flatter — each node only ever receives a handful of
+files, not the full generated set, so no per-component nesting is needed:
+a flat `certificates/`, a flat `kubeconfig/`, and (masters only) an
+`encryptionkey/` holding `encryption-config.yaml`. See the "Distribute"
+steps in 02/03/04 and the note in
 [16 — Cleanup](16-cleanup.md).
 
 ## 5. Node/IP reference

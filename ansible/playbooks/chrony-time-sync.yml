@@ -1,0 +1,62 @@
+---
+# Fixes clock drift on VirtualBox lab VMs: after a host is paused, snapshotted,
+# or the laptop sleeps, the guest clock can drift by hours or days. A rough
+# HTTP-based correction gets the clock close enough for apt/chrony to trust
+# repo Release files (see the first two tasks below), then chrony takes over.
+# Ubuntu's default chrony config (`makestep 1.0 3`) only allows a hard step
+# during the first 3 corrections after chronyd starts — after that it only
+# slews slowly, so a multi-hour offset gets stuck "Not synchronised" until
+# chrony is restarted. `makestep 1.0 -1` allows an immediate step at any time,
+# so this self-heals without manual intervention (see docs/12-troubleshooting.md
+# for the manual recovery steps this replaces).
+- name: Keep clocks in sync on all lab VMs
+  hosts: all
+  become: true
+  tasks:
+    # Chicken-and-egg: if the clock has drifted enough, apt itself refuses to
+    # trust repo Release files ("not valid yet"/"unknown reason"), so we can't
+    # even apt-install chrony to fix the clock. Get a rough time from a plain
+    # HTTP (not HTTPS) response's Date header first — plain HTTP has no TLS
+    # cert to validate, so it works no matter how wrong the clock currently is.
+    - name: Get current time from a plain-HTTP source (no TLS cert validation to trip on)
+      ansible.builtin.shell: |
+        set -o pipefail
+        curl -sI http://archive.ubuntu.com/ubuntu/ | awk -F': ' 'tolower($1)=="date" {print $2}' | tr -d '\r'
+      args:
+        executable: /bin/bash
+      register: http_date
+      changed_when: false
+      failed_when: http_date.stdout | trim | length == 0
+
+    - name: Step the system clock to the fetched time so apt will trust repo Release files
+      ansible.builtin.command: "date -s '{{ http_date.stdout | trim }}'"
+      changed_when: true
+
+    - name: Install chrony
+      ansible.builtin.apt:
+        name: chrony
+        state: present
+        update_cache: true
+
+    - name: Allow chrony to step the clock on any large offset, not just the first 3
+      ansible.builtin.lineinfile:
+        path: /etc/chrony/chrony.conf
+        regexp: '^makestep'
+        line: 'makestep 1.0 -1'
+      notify: restart chrony
+
+    - name: Ensure chrony is enabled and running
+      ansible.builtin.systemd:
+        name: chrony
+        enabled: true
+        state: started
+
+    - name: Force an immediate resync
+      ansible.builtin.command: chronyc makestep
+      changed_when: true
+
+  handlers:
+    - name: restart chrony
+      ansible.builtin.systemd:
+        name: chrony
+        state: restarted

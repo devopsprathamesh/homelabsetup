@@ -17,6 +17,7 @@ ansible/
     hosts.ini               # groups: loadbalancer, masters, workers, k8s_cluster
   playbooks/
     lab-hostnames.yml       # adds lab-<hostname> aliases to /etc/hosts on every node
+    chrony-time-sync.yml    # installs chrony and fixes VirtualBox clock drift on every node
 ```
 
 ## Inventory groups
@@ -88,3 +89,31 @@ existing VM. Only a full `vagrant destroy` + `vagrant up` rebuilds the VM
 (and its `/etc/hosts`) from scratch, wiping the ansible-managed block too
 — re-run this playbook after that, or after adding a new node to the
 inventory.
+
+### `playbooks/chrony-time-sync.yml`
+
+Installs `chrony` on every node and fixes the clock-drift issue these
+VirtualBox VMs hit whenever a host is paused, snapshotted, or the laptop
+sleeps: Ubuntu's default `makestep 1.0 3` only lets chrony hard-step the
+clock during its first 3 corrections after starting, so a multi-hour
+drift built up while suspended gets stuck "Not synchronised" until the
+service is restarted by hand. This sets `makestep 1.0 -1` (always allow
+a step) and forces an immediate `chronyc makestep`, so it self-heals on
+every run instead of needing the manual recovery in
+[`docs/12-troubleshooting.md`](../kubernetes-with-ansible/docs/12-troubleshooting.md).
+
+```bash
+ssh admin@lab-server
+cd ~/ansible
+
+ansible-playbook playbooks/chrony-time-sync.yml --diff
+```
+
+Verify:
+
+```bash
+ansible all -a "chronyc tracking"
+```
+
+Look for `Leap status: Normal` and a `^*` source in `chronyc sources -v`
+on each host.

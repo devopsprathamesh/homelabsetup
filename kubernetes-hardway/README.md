@@ -36,14 +36,13 @@ Network: `192.168.56.0/24`, host-only, not reachable outside the host.
           │ scheduler         │ │ scheduler         │ │ scheduler         │
           └──────────────────┘ └──────────────────┘ └──────────────────┘
                     ▲                  ▲                  ▲
-        ┌───────────┼──────────────────┼──────────────────┼───────────┐
-        ▼           ▼                  ▼                  ▼           ▼
-   ┌─────────┐ ┌─────────┐        ┌─────────┐        ┌─────────┐
-   │ node1   │ │ node2   │        │ node3   │        │  ...    │
-   │ kubelet │ │ kubelet │        │ kubelet │        │         │
-   │kube-proxy│ │kube-proxy│       │kube-proxy│       │         │
-   │containerd│ │containerd│       │containerd│       │         │
-   └─────────┘ └─────────┘        └─────────┘        └─────────┘
+                    │                  │                  │
+          ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐
+          │ node1             │ │ node2             │ │ node3             │
+          │ kubelet           │ │ kubelet           │ │ kubelet           │
+          │ kube-proxy        │ │ kube-proxy        │ │ kube-proxy        │
+          │ containerd        │ │ containerd        │ │ containerd        │
+          └──────────────────┘ └──────────────────┘ └──────────────────┘
 ```
 
 ## etcd fault tolerance
@@ -85,7 +84,15 @@ mid-guide.
 10. [Pod Network Routes](docs/10-pod-network-routes.md) — static routing between node CIDRs
 11. [DNS Cluster Add-on](docs/11-dns-cluster-addon.md) — CoreDNS
 12. [Smoke Test](docs/12-smoke-test.md) — prove it all works
-13. [Cleanup](docs/13-cleanup.md) — tear down / reset
+14. [High Availability Deep Dive](docs/14-ha-deep-dive.md) — explore why the
+    cluster survives what it survives, and where that stops
+15. Disaster Recovery — etcd snapshot/restore, quorum loss with real data
+    loss, rebuilding a master from nothing (not written yet; builds on 14)
+16. [Cleanup](docs/16-cleanup.md) — tear down / reset, once you're actually
+    done exploring
 
-Work through them in order — later steps assume files and state from earlier
-ones. Run each command block on the node(s) named in its heading.
+Work through 1–12 in order — later steps assume files and state from earlier
+ones. Run each command block on the node(s) named in its heading. 14 and 15
+are optional post-bring-up exploration modules; 16 is the true last step —
+don't run it until you're done with 14/15, since it throws away the exact
+cluster those modules are built to keep breaking and un-breaking.

@@ -17,6 +17,11 @@ matters.
 
 ## 1. Download and install etcd
 
+**Run on:** `master1`, `master2`, `master3` — repeat this whole doc's
+steps 1-4 on each, one node at a time (`ssh admin@lab-master1`, do steps
+1-4, then `ssh admin@lab-master2`, etc.) or interleaved — just make sure
+each node finishes its own copy of every step.
+
 ```bash
 wget -q --show-progress --https-only \
   "https://github.com/etcd-io/etcd/releases/download/v3.5.15/etcd-v3.5.15-linux-amd64.tar.gz"
@@ -104,7 +109,10 @@ wait to hear from its peers before forming quorum (a majority of 3, i.e.
 2), so starting them one at a time with a delay is fine; the cluster just
 won't report healthy until at least 2 are up.
 
-## 5. Verify the cluster (run on any master)
+## 5. Verify the cluster
+
+**Run on:** any one of `master1`/`master2`/`master3` — this is a read
+against the whole cluster, not a per-node step.
 
 ```bash
 sudo ETCDCTL_API=3 etcdctl member list \

@@ -12,6 +12,9 @@ redundancy, any count works).
 
 ## 1. Download and install binaries
 
+**Run on:** `master1`, `master2`, `master3` — repeat steps 1-5 on each
+(`ssh` in to one, do steps 1-5, move to the next).
+
 ```bash
 sudo mkdir -p /etc/kubernetes/config
 
@@ -164,8 +167,6 @@ EOF
 ## 5. Start the control plane
 
 ```bash
-sudo mv kube-controller-manager.kubeconfig kube-scheduler.kubeconfig /var/lib/kubernetes/ 2>/dev/null || true
-
 sudo systemctl daemon-reload
 sudo systemctl enable kube-apiserver kube-controller-manager kube-scheduler
 sudo systemctl start kube-apiserver kube-controller-manager kube-scheduler
@@ -174,7 +175,9 @@ sleep 5
 sudo systemctl status kube-apiserver kube-controller-manager kube-scheduler --no-pager
 ```
 
-## 6. Verify (on any master)
+## 6. Verify
+
+**Run on:** any one of `master1`/`master2`/`master3`.
 
 ```bash
 sudo cp admin.kubeconfig /var/lib/kubernetes/ 2>/dev/null || true
@@ -197,8 +200,9 @@ up the new etcd member and cert SANs:
 
 ## 7. RBAC: allow kube-apiserver to talk to kubelets
 
-Run **once**, from any master, against the live API (this is a cluster
-object, not per-node config — applying it twice is harmless).
+**Run on:** any one of `master1`/`master2`/`master3` — **once**, not on
+all three (this is a cluster object, not per-node config — applying it
+twice is harmless, just unnecessary).
 
 The apiserver cert's CN is `kubernetes` (not `system:masters` group), so it
 needs an explicit ClusterRole + binding to call kubelet APIs (logs, exec,

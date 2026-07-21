@@ -1,7 +1,7 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 #
-# HA Kubernetes lab: 1 LB/server, 2 masters, 3 worker nodes.
+# HA Kubernetes lab: 1 LB/server, 3 masters, 3 worker nodes.
 # `vagrant up` brings up everything; `vagrant up <name>` brings up one node.
 
 BOX = "cloud-image/ubuntu-24.04"

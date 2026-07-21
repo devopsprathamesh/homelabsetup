@@ -11,8 +11,9 @@ kubectl create secret generic kubernetes-the-hard-way \
   --from-literal="mykey=mydata"
 ```
 
-On **either master**, read the raw etcd value and confirm it's encrypted
-(`k8s:enc:aescbc:v1:key1` prefix, not plaintext `mydata`):
+**Run on:** any one of `master1`/`master2`/`master3`. Read the raw etcd
+value and confirm it's encrypted (`k8s:enc:aescbc:v1:key1` prefix, not
+plaintext `mydata`):
 
 ```bash
 sudo ETCDCTL_API=3 etcdctl get /registry/secrets/default/kubernetes-the-hard-way \
@@ -93,7 +94,10 @@ NodePort traffic to the right backend cluster-wide.
 ## 8. Control-plane HA (optional, destructive-ish but reversible)
 
 With 3 masters, the cluster tolerates losing any one node — both the
-apiserver (via the LB) and etcd (via quorum) stay fully functional:
+apiserver (via the LB) and etcd (via quorum) stay fully functional.
+
+**Run on:** client machine — the `ssh admin@lab-master1` calls below reach
+out to `master1` for you; you stay on your own shell throughout.
 
 ```bash
 ssh admin@lab-master1 'sudo systemctl stop kube-apiserver'
@@ -103,7 +107,10 @@ ssh admin@lab-master1 'sudo systemctl start kube-apiserver'
 
 To specifically confirm etcd quorum survives a single-node loss (not just
 the apiserver), stop etcd itself on one master and confirm writes still
-work through the other two:
+work through the other two.
+
+**Run on:** client machine (same as above — `ssh` reaches `master1` for
+you).
 
 ```bash
 ssh admin@lab-master1 'sudo systemctl stop etcd'
@@ -122,5 +129,7 @@ kubectl delete secret kubernetes-the-hard-way
 
 If everything above passed, the cluster is fully functional end to end.
 
-Next: [13 — Cleanup](13-cleanup.md) (only if you want to tear the whole
-cluster down, not required otherwise)
+Next: [14 — High Availability Deep Dive](14-ha-deep-dive.md) to actually
+explore *why* it survives what it survives, rather than just confirming
+that it does. [16 — Cleanup](16-cleanup.md) is there whenever you're done
+experimenting, not a required next step.

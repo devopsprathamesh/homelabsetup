@@ -164,10 +164,10 @@ authentication:
     clientCAFile: "/var/lib/kubernetes/ca.pem"
 authorization:
   mode: Webhook
+cgroupDriver: systemd
 clusterDomain: "cluster.local"
 clusterDNS:
   - "10.32.0.10"
-podCIDR: "${POD_CIDR}"
 resolvConf: "/run/systemd/resolve/resolv.conf"
 runtimeRequestTimeout: "15m"
 tlsCertFile: "/var/lib/kubelet/${NODE_NAME}.pem"
@@ -185,7 +185,6 @@ Requires=containerd.service
 ExecStart=/usr/local/bin/kubelet \\
   --config=/var/lib/kubelet/kubelet-config.yaml \\
   --container-runtime-endpoint=unix:///var/run/containerd/containerd.sock \\
-  --image-credential-provider-bin-dir=/opt/credential-providers \\
   --kubeconfig=/var/lib/kubelet/kubeconfig \\
   --register-node=true \\
   --v=2
@@ -204,9 +203,17 @@ uses it by default — pods need a real upstream resolver, not the
 `systemctl status systemd-resolved` and fall back to `/etc/resolv.conf` if
 resolved isn't running.
 
-The `--image-credential-provider-bin-dir` flag references a directory that
-doesn't need to exist unless you're pulling from a private registry —
-harmless to leave configured but unused.
+`cgroupDriver: systemd` matches containerd's `SystemdCgroup = true` set
+below — kubelet 1.28+ auto-detects this from the CRI runtime if omitted,
+but setting it explicitly avoids depending on that detection working.
+
+No `--image-credential-provider-bin-dir`/`-config` flags here: they're only
+needed for exec-based registry auth plugins (ECR, GCR, etc.), and setting
+`-bin-dir` without a matching `-config` — or pointing it at a directory
+that doesn't exist — makes kubelet call `os.Exit(1)` during startup
+(`RegisterCredentialProviderPlugins` in
+`pkg/kubelet/kuberuntime/kuberuntime_manager.go` fails closed). Nothing in
+this lab needs it; leave both flags out.
 
 ## 8. Configure kube-proxy
 
@@ -255,7 +262,11 @@ and `.pem`/`-key.pem` files referenced above are the per-node ones scp'd in
 [02](02-certificate-authority.md) and [03](03-kubernetes-configuration-files.md) —
 make sure you're using each node's own files, not another node's.
 
-## 11. Verify (from a control-plane node or your admin kubeconfig)
+## 11. Verify
+
+**Run on:** any master (using its local `admin.kubeconfig` from
+[03](03-kubernetes-configuration-files.md)), or the client machine once
+[09](09-configuring-kubectl.md) is done.
 
 ```bash
 kubectl get nodes --kubeconfig admin.kubeconfig

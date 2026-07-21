@@ -15,7 +15,30 @@ passwordless SSH to every node (see the root [README](../../README.md)).
 Substitute `server` for "client machine" if you'd rather drive from inside
 the lab network.
 
+Docs that involve only one machine for their whole length (02, 03, 04, 07,
+09, 11) say so once, right at the top. Docs that move between machines
+(01, 05, 06, 08, 10, 12, 14, 16) put a **`Run on:`** line right before
+every block that changes context, naming the exact machine(s).
+
+One recurring pattern to watch for: if a block loops over multiple hosts
+via `ssh admin@<host>` *inside* it, `Run on:` still says **client
+machine** — the loop itself is what reaches out to the remote hosts; you
+never leave your own shell. A block is only "on `masterN`"/"on `nodeN`"
+when the instruction is to `ssh` in *first* and then paste the block
+directly into that node's own shell.
+
+Role ↔ hostname legend, since this guide uses both interchangeably:
+
+| Role in conversation      | Actual hostname(s)      |
+|----------------------------|--------------------------|
+| load balancer / jump host  | `server`                 |
+| control plane / master     | `master1`, `master2`, `master3` |
+| worker / data plane        | `node1`, `node2`, `node3` |
+
 ## 1. Confirm connectivity to every node
+
+**Run on:** client machine (this loops over every node via `ssh` — you
+don't need to be logged into any node yourself).
 
 ```bash
 for h in lab-server lab-master1 lab-master2 lab-master3 lab-node1 lab-node2 lab-node3; do
@@ -34,6 +57,8 @@ block ran, so you may need to add its `lab-master3` line by hand).
 `vagrant/scripts/provision-common.sh` already did this at VM creation time,
 but verify — a live kubelet will refuse to start with swap on:
 
+**Run on:** client machine (loops over `master1-3` + `node1-3` via `ssh`).
+
 ```bash
 for h in lab-master1 lab-master2 lab-master3 lab-node1 lab-node2 lab-node3; do
   echo "== $h =="
@@ -43,7 +68,9 @@ done
 
 Expect `swapon --show` to print nothing, and both sysctls to read `= 1`.
 
-## 3. Install client-side tools (on your client machine)
+## 3. Install client-side tools
+
+**Run on:** client machine.
 
 ```bash
 cd /tmp
@@ -66,6 +93,8 @@ Everything generated in this guide (certs, keys, kubeconfigs) is created
 under a single scratch directory on the client machine, then scp'd out to
 nodes. Create it now:
 
+**Run on:** client machine.
+
 ```bash
 mkdir -p ~/k8s-the-hard-way && cd ~/k8s-the-hard-way
 ```
@@ -75,8 +104,9 @@ sections from inside `~/k8s-the-hard-way` unless stated otherwise.
 
 ## 5. Node/IP reference
 
-Keep this handy — it's reused verbatim in cert SANs, etcd member lists, and
-kubeconfig server URLs throughout the guide.
+Reference only — not a command block to run anywhere. Keep it handy; it's
+reused verbatim in cert SANs, etcd member lists, and kubeconfig server URLs
+throughout the guide.
 
 ```
 LB_IP=192.168.56.10       # server

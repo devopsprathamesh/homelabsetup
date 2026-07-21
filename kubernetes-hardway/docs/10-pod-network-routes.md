@@ -16,9 +16,11 @@ Recall the mapping:
 
 ## Option A — add routes on every node (node1-3, master1-3, server)
 
-Run this on **every** VM in the lab (masters and the LB need it too, so
-`kubectl exec`/health checks/anything originating from them can reach pod
-IPs directly) — adjust the loop to skip the node's own CIDR:
+**Run on:** all 7 VMs — `node1`, `node2`, `node3`, `master1`, `master2`,
+`master3`, and `server` (masters and the LB need it too, so `kubectl
+exec`/health checks/anything originating from them can reach pod IPs
+directly). SSH into each one and paste only the block for that host below
+— adjust to skip the node's own CIDR:
 
 ```bash
 # Run on node1:
@@ -66,8 +68,9 @@ for internet access).
 
 ## Verify
 
-From `node1`, ping a pod IP that will land on `node2` once you deploy
-something (or just verify routing is in place before pods exist):
+**Run on:** `node1`. Check the route to a pod IP that will land on `node2`
+once you deploy something (or just verify routing is in place before pods
+exist):
 
 ```bash
 ip route get 10.200.1.5

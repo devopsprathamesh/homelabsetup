@@ -9,8 +9,8 @@ Run on the **client machine**, inside `~/k8s-the-hard-way`.
 ENCRYPTION_KEY=$(head -c 32 /dev/urandom | base64)
 
 cat > encryption-config.yaml <<EOF
-kind: EncryptionConfig
-apiVersion: v1
+kind: EncryptionConfiguration
+apiVersion: apiserver.config.k8s.io/v1
 resources:
   - resources:
       - secrets
@@ -26,6 +26,11 @@ EOF
 The `identity: {}` provider is listed second as a fallback so already-plain
 data stays readable during a future re-key rotation; new writes use
 `aescbc` (first provider wins for writes).
+
+Use `kind: EncryptionConfiguration` / `apiVersion: apiserver.config.k8s.io/v1`
+here, not the older `EncryptionConfig`/`v1` you'll see in some tutorials —
+that legacy pair still decodes today only because apiserver keeps a
+backward-compat alias for it, not because it's the current API.
 
 Distribute to all three control-plane nodes:
 

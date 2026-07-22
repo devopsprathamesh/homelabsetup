@@ -52,6 +52,48 @@ kubectl exec ${POD_A} -- curl -s -o /dev/null -w "%{http_code}\n" http://${POD_B
 Expect `200`. A timeout here almost always means a missing route from
 [10 — Pod Network Routes](10-pod-network-routes.md).
 
+### What's actually happening on the wire
+
+```mermaid
+flowchart LR
+    subgraph node1["node1 · 192.168.56.13"]
+        direction LR
+        A["Pod A<br/>10.200.0.2"] -->|veth pair| B1["cnio0 bridge<br/>10.200.0.1"]
+        B1 -->|routing table| N1["enp0s8"]
+    end
+    subgraph node2["node2 · 192.168.56.14"]
+        direction LR
+        N2["enp0s8"] -->|routing table| B2["cnio0 bridge<br/>10.200.1.1"]
+        B2 -->|veth pair| Bp["Pod B<br/>10.200.1.2"]
+    end
+    N1 -->|"192.168.56.0/24"| N2
+```
+
+Pod A's network namespace has one interface: one end of a **veth
+pair** (a virtual point-to-point cable). The other end is plugged into
+`cnio0`, the Linux bridge the `bridge` CNI plugin created (doc 08 §5) —
+every pod's veth-host-end is a port on it. Since `10.200.1.2` isn't a
+local bridge port, the bridge hands the packet to the host's own kernel,
+whose **routing table** matches the static route from doc 10
+(`10.200.1.0/24 via 192.168.56.14`) and sends it out `enp0s8` — with
+`ipMasq: true` from the CNI config, SNAT'd to `node1`'s own IP as it
+leaves, which is also why the return path needs no special handling on
+`node2`.
+
+It crosses the plain host-only network — no overlay, no encapsulation,
+just a real L3 hop, which is the entire reason doc 10's routes have to
+exist by hand here. `node2`'s routing table sees `10.200.1.0/24` as a
+directly-connected bridge subnet (a *delivery* decision, not the
+*forwarding* decision `node1` made) and hands it to `cnio0`, which ARPs
+for `10.200.1.2` and delivers across Pod B's veth pair into its
+namespace.
+
+That asymmetry — forwarding decision on the source node, delivery
+decision on the destination node — is exactly what an overlay CNI like
+Cilium's VXLAN ([13 — Migrating to Cilium](13-migrating-to-cilium.md))
+collapses into a single tunnel decision, which is why that migration
+deletes doc 10 entirely.
+
 ## 4. Port forwarding
 
 ```bash

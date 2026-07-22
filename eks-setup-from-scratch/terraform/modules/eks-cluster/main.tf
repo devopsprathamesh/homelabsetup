@@ -34,8 +34,8 @@ module "eks" {
   }
 
   # --- Full control-plane audit trail ---
-  enabled_log_types              = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
-  create_cloudwatch_log_group    = true
+  enabled_log_types                      = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
+  create_cloudwatch_log_group            = true
   cloudwatch_log_group_retention_in_days = var.log_retention_days
   cloudwatch_log_group_kms_key_id        = var.kms_key_arn
 

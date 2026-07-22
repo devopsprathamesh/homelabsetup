@@ -71,7 +71,6 @@ resource "aws_route53_record" "latency_primary" {
   type    = "A"
 
   set_identifier = "${var.primary_region}-latency"
-  region         = var.primary_region
 
   latency_routing_policy {
     region = var.primary_region
@@ -94,7 +93,6 @@ resource "aws_route53_record" "latency_secondary" {
   type    = "A"
 
   set_identifier = "${var.secondary_region}-latency"
-  region         = var.secondary_region
 
   latency_routing_policy {
     region = var.secondary_region

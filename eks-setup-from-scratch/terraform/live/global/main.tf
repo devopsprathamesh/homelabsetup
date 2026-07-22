@@ -27,8 +27,8 @@ module "backup_kms" {
 module "backup_bucket" {
   source = "../../modules/backup-bucket"
 
-  kms_key_arn            = module.backup_kms.key_arn
-  backup_retention_days  = 90
+  kms_key_arn           = module.backup_kms.key_arn
+  backup_retention_days = 90
 }
 
 data "aws_route53_zone" "primary" {

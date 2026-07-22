@@ -27,9 +27,9 @@ module "karpenter" {
 
   cluster_name = var.cluster_name
 
-  # Pod Identity, not IRSA.
-  enable_irsa                    = false
-  enable_pod_identity            = true
+  # Pod Identity, not IRSA: this submodule creates a Pod Identity association by default
+  # (create_pod_identity_association defaults to true, no separate IRSA toggle exists —
+  # the module is built around Pod Identity as of v21.x).
   create_pod_identity_association = true
 
   # Karpenter needs to terminate/create instances tagged with the cluster's discovery
@@ -44,12 +44,12 @@ module "karpenter" {
 }
 
 resource "helm_release" "karpenter" {
-  name             = "karpenter"
-  namespace        = "kube-system"
-  repository       = "oci://public.ecr.aws/karpenter"
-  chart            = "karpenter"
-  version          = var.karpenter_chart_version
-  wait             = true
+  name       = "karpenter"
+  namespace  = "kube-system"
+  repository = "oci://public.ecr.aws/karpenter"
+  chart      = "karpenter"
+  version    = var.karpenter_chart_version
+  wait       = true
 
   values = [
     yamlencode({

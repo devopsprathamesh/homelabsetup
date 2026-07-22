@@ -22,14 +22,14 @@ terraform {
   }
 }
 
-resource "kubernetes_namespace" "istio_system" {
+resource "kubernetes_namespace_v1" "istio_system" {
   metadata {
     name   = "istio-system"
     labels = { "topology.istio.io/network" = var.network_name }
   }
 }
 
-resource "kubernetes_namespace" "istio_ingress" {
+resource "kubernetes_namespace_v1" "istio_ingress" {
   metadata {
     name = "istio-ingress"
   }
@@ -37,7 +37,7 @@ resource "kubernetes_namespace" "istio_ingress" {
 
 resource "helm_release" "istio_base" {
   name       = "istio-base"
-  namespace  = kubernetes_namespace.istio_system.metadata[0].name
+  namespace  = kubernetes_namespace_v1.istio_system.metadata[0].name
   repository = "https://istio-release.storage.googleapis.com/charts"
   chart      = "base"
   version    = var.istio_version
@@ -46,7 +46,7 @@ resource "helm_release" "istio_base" {
 
 resource "helm_release" "istiod" {
   name       = "istiod"
-  namespace  = kubernetes_namespace.istio_system.metadata[0].name
+  namespace  = kubernetes_namespace_v1.istio_system.metadata[0].name
   repository = "https://istio-release.storage.googleapis.com/charts"
   chart      = "istiod"
   version    = var.istio_version
@@ -95,7 +95,7 @@ resource "helm_release" "istiod" {
 
 resource "helm_release" "istio_ingressgateway" {
   name       = "istio-ingressgateway"
-  namespace  = kubernetes_namespace.istio_ingress.metadata[0].name
+  namespace  = kubernetes_namespace_v1.istio_ingress.metadata[0].name
   repository = "https://istio-release.storage.googleapis.com/charts"
   chart      = "gateway"
   version    = var.istio_version
@@ -112,7 +112,7 @@ resource "helm_release" "istio_ingressgateway" {
       service = {
         type = "LoadBalancer"
         annotations = {
-          "service.beta.kubernetes.io/aws-load-balancer-type"                             = "external"
+          "service.beta.kubernetes.io/aws-load-balancer-type"                              = "external"
           "service.beta.kubernetes.io/aws-load-balancer-nlb-target-type"                   = "ip"
           "service.beta.kubernetes.io/aws-load-balancer-scheme"                            = "internet-facing"
           "service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled" = "true"
@@ -145,7 +145,7 @@ resource "kubernetes_manifest" "strict_mtls" {
     kind       = "PeerAuthentication"
     metadata = {
       name      = "default"
-      namespace = kubernetes_namespace.istio_system.metadata[0].name
+      namespace = kubernetes_namespace_v1.istio_system.metadata[0].name
     }
     spec = {
       mtls = { mode = "STRICT" }

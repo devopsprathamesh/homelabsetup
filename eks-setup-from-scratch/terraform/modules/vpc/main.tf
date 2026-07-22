@@ -34,8 +34,8 @@ module "vpc" {
   flow_log_max_aggregation_interval    = 60
 
   public_subnet_tags = merge(var.tags, {
-    "kubernetes.io/role/elb"                     = "1"
-    "kubernetes.io/cluster/${var.cluster_name}"  = "shared"
+    "kubernetes.io/role/elb"                    = "1"
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
   })
 
   private_subnet_tags = merge(var.tags, {

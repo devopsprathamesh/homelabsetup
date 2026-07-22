@@ -126,8 +126,8 @@ module "platform_addons" {
   route53_zone_arns = var.route53_zone_arns
 
   # Primary region: schedules the backups the DR region will restore from.
-  enable_velero       = true
-  velero_bucket_name  = data.terraform_remote_state.global.outputs.velero_bucket_name
+  enable_velero      = true
+  velero_bucket_name = data.terraform_remote_state.global.outputs.velero_bucket_name
   velero_backup_schedules = {
     daily = {
       schedule = "0 3 * * *"

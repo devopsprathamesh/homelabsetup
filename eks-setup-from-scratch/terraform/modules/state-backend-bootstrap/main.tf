@@ -8,7 +8,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 6.0"
     }
   }
 }
@@ -57,6 +57,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "state" {
   rule {
     id     = "expire-noncurrent-state-versions"
     status = "Enabled"
+    filter {}
     noncurrent_version_expiration {
       noncurrent_days = 90
     }

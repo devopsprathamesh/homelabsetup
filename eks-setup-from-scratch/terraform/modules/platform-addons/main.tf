@@ -47,8 +47,8 @@ module "addons" {
   enable_external_dns = true
   external_dns = {
     values = [yamlencode({
-      provider = "aws"
-      policy   = "sync"
+      provider   = "aws"
+      policy     = "sync"
       txtOwnerId = var.cluster_name
     })]
   }
@@ -98,12 +98,12 @@ module "addons" {
           }
         }
         cloudWatchLogs = {
-          enabled         = true
-          region          = var.region
-          logGroupName    = "/eks/${var.cluster_name}/application"
+          enabled          = true
+          region           = var.region
+          logGroupName     = "/eks/${var.cluster_name}/application"
           logGroupTemplate = ""
-          logStreamPrefix = "app-"
-          autoCreateGroup = true
+          logStreamPrefix  = "app-"
+          autoCreateGroup  = true
         }
         tolerations = [
           { operator = "Exists" } # Fluent Bit is a DaemonSet — must run on every node, including tainted ones.
@@ -240,9 +240,9 @@ resource "aws_iam_role" "external_secrets" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
+      Effect    = "Allow"
       Principal = { Federated = var.oidc_provider_arn }
-      Action = "sts:AssumeRoleWithWebIdentity"
+      Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {
         StringEquals = {
           "${local.oidc_provider_url}:sub" = "system:serviceaccount:external-secrets:external-secrets"
@@ -278,9 +278,9 @@ resource "aws_iam_role" "fluent_bit" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
+      Effect    = "Allow"
       Principal = { Federated = var.oidc_provider_arn }
-      Action = "sts:AssumeRoleWithWebIdentity"
+      Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {
         StringEquals = {
           "${local.oidc_provider_url}:sub" = "system:serviceaccount:logging:aws-for-fluent-bit"
@@ -298,7 +298,7 @@ resource "aws_iam_role_policy_attachment" "fluent_bit" {
 }
 
 # --- Default StorageClass: gp3, encrypted, WaitForFirstConsumer ---
-resource "kubernetes_storage_class" "gp3_default" {
+resource "kubernetes_storage_class_v1" "gp3_default" {
   metadata {
     name = "gp3"
     annotations = {

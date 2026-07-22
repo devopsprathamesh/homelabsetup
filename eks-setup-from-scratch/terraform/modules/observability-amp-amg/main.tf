@@ -27,7 +27,7 @@ resource "aws_grafana_workspace" "this" {
   account_access_type      = "CURRENT_ACCOUNT"
   authentication_providers = ["AWS_SSO"]
   permission_type          = "SERVICE_MANAGED"
-  data_sources              = ["PROMETHEUS", "CLOUDWATCH", "XRAY"]
+  data_sources             = ["PROMETHEUS", "CLOUDWATCH", "XRAY"]
   role_arn                 = aws_iam_role.grafana.arn
   tags                     = var.tags
 }
@@ -92,7 +92,7 @@ resource "helm_release" "kube_prometheus_stack" {
   values = [
     yamlencode({
       # No built-in Grafana or local long-term storage — AMG + AMP are the source of truth.
-      grafana    = { enabled = false }
+      grafana = { enabled = false }
       prometheus = {
         prometheusSpec = {
           retention = "6h" # local buffer only, in case remote_write briefly falls behind

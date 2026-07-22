@@ -1,9 +1,9 @@
 output "istio_system_namespace" {
-  value = kubernetes_namespace.istio_system.metadata[0].name
+  value = kubernetes_namespace_v1.istio_system.metadata[0].name
 }
 
 output "istio_ingress_namespace" {
-  value = kubernetes_namespace.istio_ingress.metadata[0].name
+  value = kubernetes_namespace_v1.istio_ingress.metadata[0].name
 }
 
 output "ingressgateway_release_name" {

@@ -1,0 +1,58 @@
+# Canary strategy: progressively shifts real traffic (via the VirtualService weights)
+# from stable to canary, running automated analysis (success-rate query against the
+# in-cluster Prometheus) between steps. A failed analysis run triggers automatic
+# rollback — see docs/runbooks/canary-rollback-runbook.md for what that looks like
+# operationally, and kubernetes/apps/workloads/example-app/rollout-bluegreen-example.yaml
+# for the alternative blue-green strategy.
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: example-app
+spec:
+  replicas: 6
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: example-app
+  template:
+    metadata:
+      labels:
+        app: example-app
+    spec:
+      containers:
+        - name: example-app
+          image: 123456789012.dkr.ecr.us-east-1.amazonaws.com/example-app:__IMAGE_TAG__
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits: { memory: "256Mi" }
+  strategy:
+    canary:
+      canaryService: example-app-canary
+      stableService: example-app-stable
+      trafficRouting:
+        istio:
+          virtualService:
+            name: example-app
+            routes:
+              - primary
+      steps:
+        - setWeight: 10
+        - pause: { duration: 2m }
+        - analysis:
+            templates:
+              - templateName: success-rate
+            args:
+              - name: service-name
+                value: example-app-canary
+        - setWeight: 30
+        - pause: { duration: 5m }
+        - setWeight: 60
+        - pause: { duration: 5m }
+        - setWeight: 100

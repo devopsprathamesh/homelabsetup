@@ -1,0 +1,29 @@
+# Binds to the Terraform-managed istio-ingressgateway Service. HTTP is redirected to
+# HTTPS; TLS termination happens here at the gateway (not per-app), using a cert
+# cert-manager issues via the ClusterIssuer in cluster-issuer.yaml.
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: main-gateway
+  namespace: istio-ingress
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - "*.example.com"
+      tls:
+        httpsRedirect: true
+    - port:
+        number: 443
+        name: https
+        protocol: HTTPS
+      hosts:
+        - "*.example.com"
+      tls:
+        mode: SIMPLE
+        credentialName: wildcard-example-com-tls

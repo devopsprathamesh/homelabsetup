@@ -1,0 +1,37 @@
+# ILLUSTRATIVE — not wired into base/kustomization.yaml. Shows the blue-green alternative
+# to the canary strategy in base/rollout.yaml (see
+# docs/architecture/08-progressive-delivery-canary-bluegreen.md for when to pick which).
+# Swap this in for rollout.yaml's `strategy:` block to switch an app to blue-green.
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: example-app
+spec:
+  replicas: 6
+  selector:
+    matchLabels:
+      app: example-app
+  template:
+    metadata:
+      labels:
+        app: example-app
+    spec:
+      containers:
+        - name: example-app
+          image: 123456789012.dkr.ecr.us-east-1.amazonaws.com/example-app:__IMAGE_TAG__
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+  strategy:
+    blueGreen:
+      activeService: example-app-stable   # what production traffic (and the Gateway) hits
+      previewService: example-app-canary  # new version, reachable only via its own preview route for smoke testing
+      autoPromotionEnabled: false         # a human (or an automated gate) must promote
+      scaleDownDelaySeconds: 300          # keep the old "blue" ReplicaSet warm for 5m post-promotion, for instant rollback
+      prePromotionAnalysis:
+        templates:
+          - templateName: success-rate
+        args:
+          - name: service-name
+            value: example-app-canary

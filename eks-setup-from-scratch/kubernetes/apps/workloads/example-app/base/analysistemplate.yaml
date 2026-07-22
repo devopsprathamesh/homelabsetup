@@ -1,0 +1,22 @@
+# Queries the in-cluster Prometheus (the local scrape agent that remote_writes to AMP —
+# see terraform/modules/observability-amp-amg) for the canary's HTTP success rate.
+# 3 consecutive failures below the threshold aborts the rollout automatically.
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: success-rate
+spec:
+  args:
+    - name: service-name
+  metrics:
+    - name: success-rate
+      interval: 1m
+      successCondition: result[0] >= 0.95
+      failureLimit: 3
+      provider:
+        prometheus:
+          address: http://kube-prometheus-stack-prometheus.monitoring.svc:9090
+          query: |
+            sum(rate(istio_requests_total{destination_service_name="{{args.service-name}}",response_code!~"5.."}[2m]))
+            /
+            sum(rate(istio_requests_total{destination_service_name="{{args.service-name}}"}[2m]))

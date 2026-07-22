@@ -1,0 +1,23 @@
+# Weights start 100/0 (all traffic to stable). The Argo Rollouts controller — NOT a human,
+# NOT ArgoCD — mutates the destination weights below in place as each canary step in
+# rollout.yaml executes. Git stays the source of truth for the ROUTE STRUCTURE; the
+# live weight values are expected to drift from what's in Git during an active rollout,
+# which is why this resource is excluded from ArgoCD's diff/self-heal for weight fields.
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: example-app
+spec:
+  hosts:
+    - app.example.com
+  gateways:
+    - istio-ingress/main-gateway
+  http:
+    - name: primary
+      route:
+        - destination:
+            host: example-app-stable
+          weight: 100
+        - destination:
+            host: example-app-canary
+          weight: 0

@@ -1,0 +1,25 @@
+# Namespace-scoped Istio objects (Gateway, cert-manager ClusterIssuer) that need the
+# Kubernetes API but aren't part of the Terraform-managed Istio control plane install
+# itself. Kept as a separate Application so it can be synced/rolled back independently
+# of any single workload.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-config
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/your-org/eks-setup-from-scratch.git
+    targetRevision: main
+    path: kubernetes/istio
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

@@ -1,0 +1,24 @@
+# Warm standby: same host as prod (app.example.com) so a Route53 failover flip needs no
+# app-level config change — only DNS moves. Replica count starts low; the DR failover
+# runbook (docs/runbooks/dr-failover-runbook.md) scales this up as one of its steps,
+# and Karpenter provisions the nodes to back it.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: example-app
+resources:
+  - ../../base
+patches:
+  - target:
+      kind: Rollout
+      name: example-app
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+  - target:
+      kind: VirtualService
+      name: example-app
+    patch: |-
+      - op: replace
+        path: /spec/hosts/0
+        value: app.example.com

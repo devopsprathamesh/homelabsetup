@@ -1,0 +1,31 @@
+# Two Services, not one: Argo Rollouts' Istio integration needs a stable Service and a
+# canary Service pointing at disjoint pod selectors (rollouts-pod-template-hash), so the
+# VirtualService/DestinationRule can address each version's pods independently while the
+# Rollout controller shifts weight between them.
+apiVersion: v1
+kind: Service
+metadata:
+  name: example-app-stable
+  labels:
+    app: example-app
+spec:
+  selector:
+    app: example-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: example-app-canary
+  labels:
+    app: example-app
+spec:
+  selector:
+    app: example-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080

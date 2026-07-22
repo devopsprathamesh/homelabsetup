@@ -4,8 +4,11 @@ A battle-tested, from-scratch Amazon EKS platform built entirely with Terraform:
 
 ## Start here
 
+**Installing this for the first time? Skip straight to [docs/installation-guide.md](docs/installation-guide.md)** — it's the complete, ordered, copy-pasteable sequence from an empty AWS account to a running platform. Everything below is architectural background, not a setup sequence.
+
 | If you want to... | Read |
 |---|---|
+| **Install this platform step by step** | **[docs/installation-guide.md](docs/installation-guide.md)** |
 | Understand the whole system in one pass | [docs/architecture/00-overview.md](docs/architecture/00-overview.md) |
 | Compare Karpenter vs EKS Auto Mode | [docs/architecture/01-compute-karpenter-vs-automode.md](docs/architecture/01-compute-karpenter-vs-automode.md) |
 | See the VPC layout and how DNS resolves inside the cluster | [docs/architecture/02-networking-vpc.md](docs/architecture/02-networking-vpc.md) |
@@ -44,24 +47,19 @@ Terraform provisions everything through **"a working cluster with ArgoCD install
 
 ## Getting started (first-time bootstrap)
 
+Full instructions, including every placeholder value you need to replace first (account IDs, domain, repo URL) and a verification checklist for each step, are in **[docs/installation-guide.md](docs/installation-guide.md)**. The short version, once placeholders are replaced:
+
 ```bash
 # 1. One-time, manual, per region: create the S3 state backend (not itself remote-stated)
 cd terraform/modules/state-backend-bootstrap
 terraform init && terraform apply -var="region=us-east-1"
+terraform apply -var="region=us-west-2"
 
-# 2. Deploy the staging stack (first real environment — cheapest, fastest iteration loop)
-cd ../../live/us-east-1/staging
-terraform init
-terraform plan
-terraform apply   # provisions real, billable AWS resources — review the plan first
-
-# 3. Fetch kubeconfig and confirm the cluster + ArgoCD are healthy
-aws eks update-kubeconfig --name <cluster_name> --region us-east-1
-kubectl get nodes
-kubectl -n argocd get applications
+# 2. terraform/live/global (first pass) → staging → prod → dr-prod → terraform/live/global (second pass)
+# See docs/installation-guide.md for the full sequence and verification steps at each stage.
 ```
 
-See [scripts/bootstrap.sh](scripts/bootstrap.sh) for the scripted version of the above, and each `docs/architecture/*.md` page for the reasoning behind every component before you run `apply` against a real account.
+[scripts/bootstrap.sh](scripts/bootstrap.sh) automates step 1. Do not run `terraform apply` against a real account before reading [docs/installation-guide.md](docs/installation-guide.md) and the relevant `docs/architecture/*.md` pages.
 
 ## Module and tool versions
 

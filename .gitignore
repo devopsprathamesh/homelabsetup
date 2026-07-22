@@ -3,7 +3,44 @@
 .vagrant/
 
 # Shared lab-admin SSH keypair, auto-generated on first `vagrant up`
-vagrant/keys/
+# (matches keys/ in any vagrant dir, e.g. 1.vagrant/keys/)
+**/keys/
+
+# SSH / TLS private keys and certs — never commit these
+*.pem
+*.key
+*.crt
+*.csr
+*.p12
+*.pfx
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+*_ed25519
+*_ed25519.pub
+private_key
+private_key.*
+
+# Kubernetes credentials (kubeconfigs contain client certs/tokens)
+kubeconfig
+kubeconfig.*
+*.kubeconfig
+admin.conf
+
+# Cloud / env credentials
+.env
+.env.*
+*.tfvars
+*.tfstate
+*.tfstate.backup
+credentials
+credentials.*
+*creds*
+.aws/
+vault-pass*
+*vault*.yml
+!*vault*example*.yml
 
 # Claude Code local/personal settings - not shared
 .claude/settings.local.json

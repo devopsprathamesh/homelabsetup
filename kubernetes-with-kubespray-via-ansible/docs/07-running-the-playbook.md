@@ -4,6 +4,51 @@ All of this runs on `server`, inside `~/kubespray`, with the venv activated.
 This is the step that actually changes state on `master1-3` and
 `node1-3` — everything before this was read-only.
 
+## What `cluster.yml` actually does under the hood
+
+One command, but internally Kubespray runs through ordered phases — knowing
+them turns a 30-minute wall of Ansible output into something you can follow,
+and tells you *where* you are when it fails:
+
+```mermaid
+flowchart TD
+    A["Phase 0 — facts & preflight<br/>gather facts from all 6 hosts,<br/>verify OS / vars / connectivity"] --> B["Phase 1 — bootstrap-os + preinstall<br/>packages, sysctls, swap off,<br/>/etc/hosts, resolv.conf"]
+    B --> C["Phase 2 — container runtime<br/>install containerd on all 6 nodes"]
+    C --> D["Phase 3 — download<br/>pull/verify images & binaries<br/>(the slowest phase on this lab)"]
+    D --> E["Phase 4 — etcd<br/>generate certs, start etcd on<br/>master1-3, wait for quorum"]
+    E --> F["Phase 5 — control plane<br/>kubeadm init on first master,<br/>join master2/master3,<br/>apiserver / scheduler /<br/>controller-manager as static pods"]
+    F --> G["Phase 6 — join workers<br/>kubelet + kube-proxy on node1-3,<br/>kubeadm join via the LB address"]
+    G --> H["Phase 7 — network plugin<br/>Calico rollout across all nodes"]
+    H --> I["Phase 8 — apps<br/>CoreDNS, metrics-server,<br/>nodelocaldns"]
+    I --> J["PLAY RECAP<br/>failed=0 on all 6 hosts"]
+```
+
+Two consequences worth internalizing:
+
+- **Order is dependency order.** etcd must have quorum before the first
+  apiserver can start; the control plane must answer on the LB address
+  before workers can join; Calico needs the apiserver. A failure in phase N
+  usually means the *real* problem is in phase N-1's output.
+- **Every phase is idempotent** — which is what makes the "just re-run it"
+  guidance below safe: completed phases verify state and skip ahead rather
+  than redoing work.
+
+## The run/failure loop
+
+```mermaid
+flowchart TD
+    R["ansible-playbook cluster.yml"] --> Q{Result?}
+    Q -->|"failed=0 everywhere"| OK["Done — go to doc 08<br/>and verify the cluster"]
+    Q -->|task failed| DIAG["Read the failing task's output<br/>(doc 12 — Troubleshooting)"]
+    DIAG --> FIX["Fix the root cause<br/>(config, connectivity, disk, ...)"]
+    FIX --> SCOPE{"How much<br/>to re-run?"}
+    SCOPE -->|default| R
+    SCOPE -->|"one host affected"| LIM["re-run with --limit=&lt;host&gt;"]
+    SCOPE -->|"diagnosed exact task"| SAT["re-run with --start-at-task=..."]
+    LIM --> Q
+    SAT --> Q
+```
+
 ## 1. Run `cluster.yml`
 
 ```bash

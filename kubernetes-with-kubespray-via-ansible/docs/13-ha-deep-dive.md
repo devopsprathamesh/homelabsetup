@@ -60,6 +60,20 @@ the leader for each. It's entirely possible the scheduler's leader is on
 `master2` while the controller-manager's is on `master3` — leadership is
 independent per component, not per node.
 
+How the lease mechanism actually works — this is what §4 below makes you
+watch happen live:
+
+```mermaid
+flowchart TD
+    A["3 copies of kube-scheduler running,<br/>one per master"] --> B{"Who holds the Lease object<br/>in kube-system?"}
+    B -->|holder| L["Active leader:<br/>does real scheduling work,<br/>renews lease every ~10s"]
+    B -->|not holder| S["Standbys on the other 2 masters:<br/>do nothing but watch the lease"]
+    L -->|"renewals stop<br/>(process died / node lost)"| X["Lease not renewed"]
+    X --> T["leaseDurationSeconds (15s) expires"]
+    T --> N["A standby acquires the lease<br/>→ becomes the new active leader"]
+    N --> L
+```
+
 ## 2. apiserver loss on the leader-holding master
 
 Watch the LB in one terminal:
@@ -136,7 +150,23 @@ back.
 
 Everything above tolerated losing **one** master. This section crosses
 that line on purpose, so you can see the difference between *degraded* and
-*down* — and that not all "down" is data loss:
+*down* — and that not all "down" is data loss.
+
+The quorum math for a 3-member etcd cluster, as a state machine:
+
+```mermaid
+stateDiagram-v2
+    healthy: 3 of 3 members up — healthy, writable
+    degraded: 2 of 3 up — quorum held (majority = 2), still fully writable
+    lost: 1 of 3 up — NO quorum. Reads AND writes hang (linearizable reads need a majority too)
+    healthy --> degraded: lose 1 member
+    degraded --> healthy: member returns
+    degraded --> lost: lose a 2nd member
+    lost --> degraded: a stopped member comes back, data dir intact — quorum re-forms (this section)
+    lost --> lost: data dirs GONE — no self-recovery possible. That's DR — doc 14 snapshot restore
+```
+
+Now cross the line:
 
 ```bash
 ssh admin@lab-master1 'sudo mv /etc/kubernetes/manifests/etcd.yaml /tmp/'

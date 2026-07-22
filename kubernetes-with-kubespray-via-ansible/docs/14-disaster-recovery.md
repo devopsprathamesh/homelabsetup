@@ -13,6 +13,20 @@ case of rebuilding one lost master while the other two are still fine.
 | Quorum lost, data **gone** (§2 below) | Everything since the last snapshot | Restore all 3 members from a snapshot |
 | One master's disk is gone, other 2 fine (§3 below) | Just that member | Rebuild the VM, recover it as an etcd member via Kubespray's own recovery playbook |
 
+The same table as a decision tree — start here mid-incident, when it's
+hardest to think clearly:
+
+```mermaid
+flowchart TD
+    A["Cluster unreachable or a master is dead"] --> B{"How many etcd members<br/>still have a healthy<br/>data directory?"}
+    B -->|"2 of 3<br/>(one master/disk lost)"| C["Quorum never lost.<br/>Targeted repair, not a restore:<br/>§3 — remove dead member,<br/>rebuild VM,<br/>recover-control-plane.yml"]
+    B -->|"0-1 of 3, but<br/>/var/lib/etcd still intact<br/>on the down members"| D["No data lost — availability only.<br/>Not DR: bring the static pods back<br/>and let quorum re-form<br/>(doc 13 §5)"]
+    B -->|"0-1 of 3 and the<br/>data dirs are GONE"| E["True disaster.<br/>§2 — restore ALL 3 members<br/>from the same snapshot.<br/>Writes since that snapshot are lost."]
+    E --> F{"Do you have<br/>an off-box snapshot?"}
+    F -->|yes| G["Proceed with §2 restore"]
+    F -->|no| H["Cluster state is unrecoverable —<br/>rebuild from scratch (cluster.yml)<br/>and redeploy workloads from git.<br/>§1 exists so you never land here."]
+```
+
 Run everything below from `server` unless a step says otherwise, same as
 [13](13-ha-deep-dive.md).
 

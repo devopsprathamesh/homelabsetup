@@ -47,6 +47,20 @@ This upgrades one control-plane node at a time (respecting etcd quorum),
 then workers — never all at once. Expect it to take noticeably longer than
 the initial `cluster.yml` run for a cluster this size.
 
+The rolling order, and why it never breaks quorum or drops the API:
+
+```mermaid
+flowchart TD
+    S["etcd snapshot taken (step 1)"] --> E["Upgrade etcd<br/>one member at a time —<br/>2 of 3 hold quorum throughout"]
+    E --> M1["Drain + upgrade master1<br/>(HAProxy routes to master2/3<br/>while its apiserver is down)"]
+    M1 --> M2["master1 healthy again →<br/>drain + upgrade master2"]
+    M2 --> M3["master2 healthy again →<br/>drain + upgrade master3"]
+    M3 --> W["Upgrade workers node1-3<br/>(serially: drain → upgrade<br/>kubelet → uncordon)"]
+    W --> V["Verify: kubectl get nodes<br/>VERSION column + smoke test"]
+    V -->|all good| DONE["Done"]
+    V -->|broken state| RB["Restore etcd snapshot<br/>(doc 14 §2) — don't improvise"]
+```
+
 ## 4. Verify after
 
 ```bash

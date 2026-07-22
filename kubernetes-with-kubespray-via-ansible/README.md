@@ -90,3 +90,28 @@ cluster nodes `ping`-able over Ansible, Ubuntu 24.04.4 LTS, Python 3.12.3,
 Work through them in order — later steps assume state from earlier ones.
 Every command is written to run from `server` (192.168.56.10) as the
 Ansible control node, as `admin`, unless a step says otherwise.
+
+How the docs chain together — build (1–8), then operate (9–12), then
+break-and-fix on purpose (13–14), then tear down (15):
+
+```mermaid
+flowchart TD
+    subgraph build ["Build the cluster"]
+        d1["01 Prerequisites"] --> d2["02 Control Node Setup"]
+        d2 --> d3["03 Inventory"] --> d4["04 Cluster Config"]
+        d4 --> d5["05 HAProxy LB"] --> d6["06 Preflight"]
+        d6 --> d7["07 cluster.yml"] --> d8["08 Verify"]
+    end
+    subgraph operate ["Operate it"]
+        d9["09 Scaling"]
+        d10["10 Upgrading"]
+        d11["11 Hardening"]
+        d12["12 Troubleshooting"]
+    end
+    subgraph resilience ["Prove the resilience"]
+        d13["13 HA Deep Dive<br/>break one piece at a time"] --> d14["14 Disaster Recovery<br/>snapshot, restore, rebuild"]
+    end
+    d8 --> operate
+    d8 --> d13
+    resilience --> d15["15 Cleanup & Teardown"]
+```

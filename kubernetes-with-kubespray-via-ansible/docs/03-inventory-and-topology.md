@@ -27,6 +27,22 @@ elsewhere in this repo:
 `server` is deliberately **not** in any of these groups — it's the LB and
 Ansible control node, not a cluster member.
 
+How the groups nest, and which hosts land in each:
+
+```mermaid
+graph TD
+    A["k8s_cluster<br/>(parent group — most plays target this)"] --> B["kube_control_plane"]
+    A --> C["kube_node"]
+    D["etcd<br/>(NOT a child of k8s_cluster)"] -.same hosts.- B
+    B --> M1["master1<br/>192.168.56.11"]
+    B --> M2["master2<br/>192.168.56.12"]
+    B --> M3["master3<br/>192.168.56.16"]
+    C --> N1["node1<br/>192.168.56.13"]
+    C --> N2["node2<br/>192.168.56.14"]
+    C --> N3["node3<br/>192.168.56.15"]
+    S["server 192.168.56.10<br/>LB + Ansible control node<br/>(in NO Kubespray group)"] -.runs plays against.-> A
+```
+
 Create `inventory/mycluster/inventory.ini`:
 
 ```ini

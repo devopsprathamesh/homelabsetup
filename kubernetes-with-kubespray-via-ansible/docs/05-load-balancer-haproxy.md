@@ -51,6 +51,24 @@ backend k8s_apiserver_backend
 `mode tcp` (not `http`) is required — the apiserver terminates its own TLS,
 so HAProxy just needs to pass bytes through, not inspect them.
 
+What a `kubectl` request actually traverses once this is live, and what the
+health checks do when a master dies:
+
+```mermaid
+flowchart LR
+    K["kubectl / kubelet / any client<br/>connects to 192.168.56.10:6443"] --> F["HAProxy frontend<br/>bind *:6443, mode tcp<br/>(TLS passed through untouched)"]
+    F --> B{"backend<br/>roundrobin +<br/>tcp-check every 5s"}
+    B -->|healthy| M1["master1 apiserver :6443"]
+    B -->|healthy| M2["master2 apiserver :6443"]
+    B -->|"fall 2 → marked DOWN,<br/>removed from rotation"| M3["master3 apiserver :6443 ✗"]
+    M3 -.->|"rise 2 → back UP,<br/>rejoins rotation"| B
+```
+
+The apiserver's TLS cert is presented by the master, not HAProxy — which is
+why doc 04's `supplementary_addresses_in_ssl_keys` must include
+`192.168.56.10`, or every client connecting via the LB would get a SAN
+mismatch.
+
 ## 3. Enable and start it
 
 ```bash

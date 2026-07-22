@@ -1,6 +1,11 @@
-# 13 — Cleanup & Teardown
+# 15 — Cleanup & Teardown
 
 Two levels of "tear down," depending on what you want to keep.
+
+If there's any chance you'll want this cluster's state back — even just to
+compare against a future attempt — take an etcd snapshot first (see
+[14 — Disaster Recovery](14-disaster-recovery.md) §1) and copy it off the
+lab network. Both options below are one-way once you actually run them.
 
 ## Option A — Reset Kubernetes, keep the VMs
 
@@ -50,3 +55,13 @@ Rebuilding from here means redoing the Vagrant provisioning (root README)
 If there's a kubeconfig or generated cluster state you care about, copy it
 off the lab network first — `scp` from `server` to your desktop. Nothing
 in `../vagrant/` or `~/kubespray` on `server` survives `vagrant destroy`.
+An etcd snapshot (per
+[14 — Disaster Recovery](14-disaster-recovery.md) §1) is the only thing
+that lets you reconstruct actual cluster *state* — Deployments, Secrets,
+ConfigMaps — afterward; a kubeconfig alone just gets you back in the door
+of a cluster that no longer exists.
+
+Once you've confirmed there's nothing left worth keeping, Option B above is
+the end of this guide — you're back to bare VMs (or no VMs at all), ready
+to start again from [01 — Prerequisites](01-prerequisites.md) whenever you
+want.

@@ -27,7 +27,8 @@ sudo systemctl restart ssh
 Already flagged when built: `server` going down takes the whole cluster's
 reachability with it, even though masters themselves are HA. Fix with a
 second LB + `keepalived`, or `kube-vip` static pods on the masters — see
-doc 05's closing section.
+doc 05's closing section, and see it triggered hands-on in
+[13 — HA Deep Dive](13-ha-deep-dive.md) §7.
 
 ## 3. etcd is stacked, not dedicated
 

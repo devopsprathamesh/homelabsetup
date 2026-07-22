@@ -91,6 +91,7 @@ though `master1-3` are fine. Genuinely removing that SPOF needs either:
 
 Out of scope for this lab's VM budget; noted again in
 [11 — Security Hardening](11-security-hardening.md) as a real
-production gap, not just a lab shortcut.
+production gap, not just a lab shortcut, and demonstrated hands-on in
+[13 — HA Deep Dive](13-ha-deep-dive.md) §7.
 
 Next: [06 — Preflight Checks](06-preflight-checks.md)

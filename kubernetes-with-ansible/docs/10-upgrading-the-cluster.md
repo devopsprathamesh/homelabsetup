@@ -59,9 +59,10 @@ Re-run the smoke test from
 
 ## 5. If it goes wrong
 
-Restore from the etcd snapshot taken in step 1
-(Kubespray's `docs/etcd.md` covers the restore procedure) rather than
-improvising — a partially-upgraded control plane with a corrupted etcd
-state is not something to debug live on a lab you rely on.
+Restore from the etcd snapshot taken in step 1 — see
+[14 — Disaster Recovery](14-disaster-recovery.md) §2 for the full restore
+procedure — rather than improvising. A partially-upgraded control plane
+with a corrupted etcd state is not something to debug live on a lab you
+rely on.
 
 Next: [11 — Security Hardening](11-security-hardening.md)

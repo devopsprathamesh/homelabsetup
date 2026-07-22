@@ -83,7 +83,9 @@ cluster nodes `ping`-able over Ansible, Ubuntu 24.04.4 LTS, Python 3.12.3,
 10. [Upgrading the Cluster](docs/10-upgrading-the-cluster.md) — `upgrade-cluster.yml`
 11. [Security Hardening](docs/11-security-hardening.md) — what "production-grade" still requires beyond defaults
 12. [Troubleshooting](docs/12-troubleshooting.md) — common failure modes and how to read them
-13. [Cleanup & Teardown](docs/13-cleanup-and-teardown.md) — `reset.yml` vs. `vagrant destroy`
+13. [HA Deep Dive](docs/13-ha-deep-dive.md) — triggering and recovering from real failures, one mechanism at a time
+14. [Disaster Recovery](docs/14-disaster-recovery.md) — etcd snapshot/restore, rebuilding a lost master
+15. [Cleanup & Teardown](docs/15-cleanup-and-teardown.md) — `reset.yml` vs. `vagrant destroy`
 
 Work through them in order — later steps assume state from earlier ones.
 Every command is written to run from `server` (192.168.56.10) as the

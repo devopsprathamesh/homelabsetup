@@ -86,4 +86,4 @@ the whole `group_vars` tree to check for a conflicting duplicate:
 grep -rn "loadbalancer_apiserver" inventory/mycluster/group_vars/
 ```
 
-Next: [13 — Cleanup & Teardown](13-cleanup-and-teardown.md)
+Next: [13 — HA Deep Dive](13-ha-deep-dive.md)

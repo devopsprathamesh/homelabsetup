@@ -205,19 +205,76 @@ NodePort traffic to the right backend cluster-wide.
 ```mermaid
 flowchart LR
     Client["curl 192.168.56.14:NODE_PORT"] --> N2E["node2: enp0s8"]
-    N2E --> KP["kube-proxy iptables<br/>DNAT to a backend Pod IP"]
-    KP -->|"backend happens to be on node1"| ROUTE["static route (doc 10)"]
+    N2E --> DNAT["kube-proxy iptables:<br/>DNAT dest → backend Pod IP (on node1)"]
+    DNAT --> SNAT["kube-proxy iptables:<br/>SNAT source → node2's own IP"]
+    SNAT -->|"static route (doc 10)"| ROUTE["crosses to node1"]
     ROUTE --> POD["nginx Pod on node1"]
+    POD -.->|reply| ROUTE
 ```
 
 Every one of `node1-3` runs `kube-proxy`, and every one of them
 programs the *same* NodePort rule — so it doesn't matter which node's IP
 you curl, all three DNAT to whichever Pod(s) actually back the Service.
-If the request lands on a node with no local backend (as drawn above:
-you curled `node2`, but the Pod is on `node1`), the DNAT'd packet then
-has to leave the node entirely and cross the pod network exactly like
-[§3](#3-cross-node-pod-networking) — same veth/bridge/routing-table path,
-just kicked off by a NodePort hit instead of a direct pod-to-pod curl.
+The **SNAT step is easy to miss but load-bearing**: without it, the Pod
+on `node1` would see the request's source IP as the *original client*,
+and would send its reply straight back to that client — bypassing
+`node2` (and its `kube-proxy`) entirely, taking a different path back
+than the request took forward. `kube-proxy` rewrites the source to
+`node2`'s own IP specifically so the reply comes back through `node2`
+first, where the same iptables rule un-does the DNAT/SNAT
+(via `conntrack` — the same package installed in
+[08 §1](08-bootstrapping-worker-nodes.md#1-install-os-level-dependencies)
+— tracking the connection so the *reply* gets rewritten automatically,
+with no separate rule needed for it) before handing it back to the
+client, so from the client's point of view it looks like a single,
+ordinary request/response. If the request lands on a node with no local
+backend (as drawn above: you curled `node2`, but the Pod is on `node1`),
+this whole DNAT+SNAT'd packet then has to leave the node entirely and
+cross the pod network exactly like [§3](#3-cross-node-pod-networking) —
+same veth/bridge/routing-table path, just kicked off by a NodePort hit
+instead of a direct pod-to-pod curl.
+
+(`kube-proxy` can skip this SNAT if a Service sets
+`externalTrafficPolicy: Local` — trading it away to preserve the
+original client source IP at the backend, at the cost of only routing
+to Pods on the node that received the request, no cross-node fan-out.)
+
+### The complete picture: DNS → Service → pod, end to end
+
+Every individual piece above (and in [§3](#3-cross-node-pod-networking)
+and [11 — DNS](11-dns-cluster-addon.md)) is a slice of one longer
+request. Here's a realistic one, start to finish — an app Pod on `node1`
+calling another Service by name, where the backend happens to live on
+`node2`:
+
+```mermaid
+sequenceDiagram
+    participant App as app Pod (node1)
+    participant DNS as CoreDNS
+    participant KP as kube-proxy (node1, iptables)
+    participant Net as host-only network + doc 10 routes
+    participant BE as backend Pod (node2)
+
+    App->>DNS: DNS query: myservice.default.svc.cluster.local
+    DNS-->>App: A record: ClusterIP (e.g. 10.32.0.55)
+    App->>KP: SYN to 10.32.0.55:80
+    KP->>KP: DNAT — rewrite dest to the backend Pod's real IP
+    KP->>KP: SNAT — rewrite source to node1's own IP
+    KP->>Net: forward (static route, doc 10)
+    Net->>BE: SYN arrives — src=node1's IP, dst=backend Pod IP
+    BE-->>Net: SYN-ACK
+    Net-->>KP: reply routes back through node1 (that's why the SNAT happened)
+    KP->>KP: conntrack reverses both NATs automatically
+    KP-->>App: SYN-ACK — looks like it came straight from the ClusterIP
+```
+
+Nothing in that chain is Service-specific *or* DNS-specific taken alone
+— it's the same DNAT/SNAT/routing/`conntrack` machinery from §3 and §7
+above, just composed: name resolution picks the address, `kube-proxy`
+picks the actual backend and makes the return path sane, and the pod
+network (doc 10, or Cilium's VXLAN if you migrated) carries it the rest
+of the way. Once you can trace this whole diagram from memory, you
+understand the network layer of this cluster end to end.
 
 ## 8. Control-plane HA (optional, destructive-ish but reversible)
 

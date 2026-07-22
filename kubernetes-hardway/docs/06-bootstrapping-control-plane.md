@@ -165,6 +165,58 @@ WantedBy=multi-user.target
 EOF
 ```
 
+### What's actually happening
+
+`kube-apiserver` is the only component with `--etcd-servers`,
+`--etcd-cafile`, etc. — nothing else in this cluster, ever, talks to
+etcd directly. `kube-controller-manager` and `kube-scheduler` reach the
+API server over loopback, not the LB, since they're running on the exact
+same host as the apiserver instance they're using:
+
+```mermaid
+flowchart LR
+    ETCD[("etcd<br/>(shared Raft cluster, doc 05)")]
+    subgraph M["this master, e.g. master1"]
+        API["kube-apiserver"]
+        CM["kube-controller-manager<br/>(127.0.0.1:6443)"]
+        SCHED["kube-scheduler<br/>(127.0.0.1:6443)"]
+    end
+    CM --> API
+    SCHED --> API
+    API <--> ETCD
+```
+
+Every one of `kubectl`, `kubelet`, `kube-proxy`, `kube-controller-manager`,
+and `kube-scheduler` only ever talks to `kube-apiserver` — it's the sole
+front door to cluster state, which is exactly why the certs from doc 02
+all follow the same client-cert-to-apiserver pattern regardless of which
+component they belong to.
+
+Running 3 full copies of this trio (one per master) means there are
+actually **three independent leader-election processes** happening at
+once, easy to conflate into one:
+
+```mermaid
+flowchart LR
+    CM1["master1<br/>kube-controller-manager"] -.->|"tries to acquire"| L1["Lease object<br/>(stored in etcd, via apiserver)"]
+    CM2["master2<br/>kube-controller-manager"] -.->|"tries to acquire"| L1
+    CM3["master3<br/>kube-controller-manager"] -.->|"tries to acquire"| L1
+    L1 -->|"holder, e.g."| Active["master2 active — the other two<br/>sit idle until the lease expires"]
+```
+
+etcd already ran its own Raft leader election in doc 05 — that leader has
+nothing to do with *this* one. `kube-controller-manager`'s active copy
+and `kube-scheduler`'s active copy each hold a *separate* `Lease` object
+of their own, and there's no rule that ties them to each other or to the
+etcd Raft leader — it's entirely possible (and normal) for
+`kube-scheduler`'s lease to be held by `master2` while
+`kube-controller-manager`'s is held by `master3` and etcd's Raft leader
+is `master1`, all at the same time. [14 §1](14-ha-deep-dive.md#1-baseline-whos-actually-in-charge-right-now)
+has you check exactly this. Without `--leader-elect=true`, all 3 copies
+of each component would act simultaneously — for `kube-scheduler` that
+means racing to bind the same Pods to nodes, which is the actual failure
+this flag exists to prevent, not just a performance nicety.
+
 ## 5. Start the control plane
 
 ```bash

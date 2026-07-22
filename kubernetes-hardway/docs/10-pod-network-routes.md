@@ -125,6 +125,73 @@ sudo chmod 600 /etc/netplan/90-pod-routes.yaml
 sudo netplan apply
 ```
 
+### Before and after: what these routes actually establish
+
+Before any of the above, every host's kernel routing table only has a
+route to the one pod CIDR it's directly connected to (its own `cnio0`
+bridge, if it's a worker) — nothing else. There's no cloud VPC router
+inventing routes for you and no dynamic routing protocol (no BGP daemon)
+running in this lab, so without an explicit entry, the kernel has no
+idea `10.200.1.0/24` even exists:
+
+```mermaid
+flowchart LR
+    subgraph n1b["node1 · 192.168.56.13"]
+        r1b["routes:<br/>10.200.0.0/24 dev cnio0 (local)"]
+    end
+    subgraph n2b["node2 · 192.168.56.14"]
+        r2b["routes:<br/>10.200.1.0/24 dev cnio0 (local)"]
+    end
+    subgraph msb["master1-3 + server"]
+        rmb["routes:<br/>(no pod-CIDR routes at all)"]
+    end
+    n1b -.->|"10.200.1.5:<br/>no route to host"| n2b
+    msb -.->|"any pod IP:<br/>no route to host"| n1b
+```
+
+After running the commands above, every host has an explicit route for
+every pod CIDR it didn't already own — the kernel's longest-prefix-match
+now hits a real entry instead of falling through to nothing:
+
+```mermaid
+flowchart LR
+    subgraph n1a["node1 · 192.168.56.13"]
+        r1a["routes:<br/>10.200.0.0/24 dev cnio0<br/>+ 10.200.1.0/24 via .14<br/>+ 10.200.2.0/24 via .15"]
+    end
+    subgraph n2a["node2 · 192.168.56.14"]
+        r2a["routes:<br/>10.200.1.0/24 dev cnio0<br/>+ 10.200.0.0/24 via .13<br/>+ 10.200.2.0/24 via .15"]
+    end
+    subgraph msa["master1-3 + server"]
+        rma["routes:<br/>10.200.0.0/24 via .13<br/>10.200.1.0/24 via .14<br/>10.200.2.0/24 via .15"]
+    end
+    n1a -->|"10.200.1.5:<br/>200 OK"| n2a
+    msa -->|"any pod IP:<br/>reachable"| n1a
+```
+
+`node3` isn't drawn separately above — it's symmetric with `node1`/`node2`
+(owns `10.200.2.0/24` locally, routes to the other two via their node
+IPs), and `master1-3`/`server` are drawn as one box because their routes
+are genuinely identical: all three of the *other* CIDRs, none of their
+own to exclude. That symmetry is also why the four of them can share one
+netplan file byte-for-byte, while each `nodeN` needs its own.
+
+Two details worth noticing:
+- The `ip route add` commands take effect immediately but vanish on
+  reboot — the netplan file is what makes the "after" state durable.
+  Running only the `ip route add` block and skipping netplan leaves you
+  in "after" until the next reboot, then silently back to "before."
+- A missing pod-CIDR route doesn't fail fast the way you might expect.
+  Every VM here also has a **default route** out `enp0s3` (the NAT
+  adapter, for internet access) — so without a specific `/24` match, the
+  kernel doesn't reject the packet as unroutable, it happily forwards it
+  via that *default* route instead. It goes out toward VirtualBox's NAT
+  gateway, which has never heard of `10.200.x.x` and just drops it, so
+  the connection sits waiting for a SYN response that's never coming.
+  That's exactly why [12 — Smoke Test](12-smoke-test.md) §3 says "a
+  timeout almost always means a missing route" — it's a timeout
+  specifically *because* a default route exists to (wrongly) accept the
+  packet, not despite one.
+
 ## Verify
 
 **Run on:** `node1`. Check the route to a pod IP that will land on `node2`

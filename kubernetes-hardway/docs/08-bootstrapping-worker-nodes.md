@@ -258,6 +258,58 @@ sudo systemctl start containerd kubelet kube-proxy
 sudo systemctl status containerd kubelet kube-proxy --no-pager
 ```
 
+### What's actually happening
+
+`kubelet` never creates a container itself — it's a watch loop that
+reacts to Pods the scheduler bound to *this* node, and delegates the
+actual work through a standard interface (CRI) to whatever's listening
+on `--container-runtime-endpoint`:
+
+```mermaid
+flowchart LR
+    API["kube-apiserver"] -->|"watch: Pod bound to me"| KUBELET["kubelet"]
+    KUBELET -->|"CRI, over containerd.sock"| CONTAINERD["containerd"]
+    CONTAINERD -->|"create sandbox"| CNI["CNI plugin (bridge)"]
+    CNI --> NETNS["new network namespace,<br/>veth pair, IP from host-local IPAM"]
+    CONTAINERD -->|"run container"| RUNC["runc (OCI runtime)"]
+    RUNC --> CGROUP["actual isolated process:<br/>namespaces + cgroups"]
+```
+
+Two genuinely different jobs happen here, both delegated by `containerd`
+rather than done by it directly: **networking** goes to whichever CNI
+plugin `/etc/cni/net.d`'s lowest-numbered file names (§5's
+`10-bridge.conf`), and **process isolation** goes to `runc`, the actual
+OCI runtime that makes the low-level `clone()`/namespace/cgroup syscalls.
+Swapping the CNI plugin (as [13 — Migrating to Cilium](13-migrating-to-cilium.md)
+does) only changes the networking half of this diagram — `containerd`
+and `runc` don't change at all, because CRI and CNI are exactly the
+seams designed to make that swap possible.
+
+The CNI side is itself split across two directories with different
+jobs, worth not conflating:
+
+```mermaid
+flowchart LR
+    Conf["/etc/cni/net.d/10-bridge.conf<br/>config: which plugin, which params"] --> Invoke["containerd's CNI invocation"]
+    Bin["/opt/cni/bin/bridge, host-local<br/>the actual plugin executables"] --> Invoke
+```
+
+`net.d` is *configuration* (what to run and with what pod CIDR); `cni/bin`
+is the actual binaries §4 extracted from the `cni-plugins` tarball.
+Neither works without the other — a config file naming a plugin that
+isn't in `cni/bin`, or vice versa, fails pod sandbox creation with a
+"failed to find plugin" error at container-start time, not at `kubelet`
+startup.
+
+Two of §1's OS packages exist for reasons that only become visible much
+later in this guide: `conntrack` and `ipset` are what `kube-proxy`'s
+`iptables` mode needs to track connection state and match Service IP
+sets efficiently — without them, `kube-proxy` fails to start rather than
+degrading quietly. `socat` is what makes
+[12 §4's port-forward](12-smoke-test.md#4-port-forwarding) work — the
+kubelet's port-forward implementation shells out to it inside the pod's
+network namespace to relay the tunnel `kube-apiserver` proxies in.
+
 ## 10. Repeat for node2 and node3
 
 Same steps, with `POD_CIDR=10.200.1.0/24` / `NODE_NAME=node2` on `node2`,

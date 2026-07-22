@@ -21,6 +21,36 @@ Cilium is what routes Service traffic, so Hubble can show you flows
 pod-to-pod IPs. Without it, Hubble only sees what the CNI touches, which
 is a much thinner picture.
 
+### What actually changes in the datapath
+
+```mermaid
+flowchart TD
+    subgraph Before["before: kube-proxy (iptables)"]
+        P1["pod sends a packet<br/>to a ClusterIP"] --> B1["cnio0 bridge"]
+        B1 -->|"bridge-nf-call-iptables=1<br/>(doc 01)"| IPT["iptables KUBE-SERVICES chain:<br/>linear rule walk → DNAT"]
+        IPT --> Out1["forwarded to a backend pod"]
+    end
+    subgraph After["after: Cilium (eBPF)"]
+        P2["pod sends a packet<br/>to a ClusterIP"] --> EBPF["eBPF program attached<br/>to the socket / veth directly"]
+        EBPF -->|"hash-map lookup, in-kernel,<br/>no iptables involved"| Out2["forwarded to a backend pod"]
+    end
+```
+
+`iptables` rules are a linear list `kube-proxy` has to re-render on every
+Service/Endpoint change, and every packet walks that list top to bottom
+looking for its matching `DNAT` rule — the exact mechanism [01](01-prerequisites.md)'s
+`bridge-nf-call-iptables` sysctl makes visible to bridged traffic in the
+first place, and the same `KUBE-SERVICES` chain [12 §7](12-smoke-test.md#7-services-nodeport)
+walks through. Cilium's eBPF programs replace that list with a hash-map
+lookup attached much earlier — often at the socket layer, before the
+packet is even fully constructed — which is both faster at scale and,
+more relevantly for this doc, the reason Hubble can exist at all:
+`iptables` counters can tell you a rule matched, but Cilium's eBPF
+programs compute the actual Service-level decision themselves (which
+Service, which backend, which policy verdict), so Hubble is just reading
+data Cilium already had, not reverse-engineering it from opaque
+byte/packet counters the way an `iptables`-based tool would have to.
+
 ## Why VXLAN, not native routing
 
 All 6 masters/nodes sit on one flat L2 subnet (`192.168.56.0/24`), so

@@ -220,6 +220,54 @@ done
 certs stay on the client machine for now — they get embedded into
 kubeconfigs in the next step rather than copied raw.
 
+### What's actually happening
+
+Every cert generated in this doc traces back to the one CA:
+
+```mermaid
+flowchart TD
+    CA["Self-signed CA<br/>ca.pem / ca-key.pem"] --> Admin["admin<br/>CN=admin, O=system:masters"]
+    CA --> Nodes["node1 / node2 / node3<br/>CN=system:node:&lt;name&gt;, O=system:nodes"]
+    CA --> CM["kube-controller-manager<br/>CN=system:kube-controller-manager"]
+    CA --> KP["kube-proxy<br/>CN=system:kube-proxy, O=system:node-proxier"]
+    CA --> Sched["kube-scheduler<br/>CN=system:kube-scheduler"]
+    CA --> API["kubernetes (apiserver)<br/>CN=kubernetes"]
+```
+
+At connection time, `kube-apiserver` (configured with
+`--client-ca-file=/var/lib/kubernetes/ca.pem`, doc 06 §2) does two
+separate checks, and it's worth keeping them apart because they fail
+differently:
+
+```mermaid
+flowchart LR
+    Client["client presents a cert<br/>e.g. node1.pem"] --> Verify{"signed by<br/>this ca.pem?"}
+    Verify -->|no| Reject["x509: certificate signed<br/>by unknown authority"]
+    Verify -->|yes| Extract["CN → username<br/>O → group(s)"]
+    Extract --> RBAC{"RBAC: does that<br/>identity have a binding?"}
+    RBAC -->|"e.g. system:nodes"| Allowed["Node authorizer: allowed,<br/>scoped to this node's own objects"]
+    RBAC -->|no matching binding| Denied["403 Forbidden"]
+```
+
+The CN/O values aren't arbitrary strings — `system:masters`,
+`system:nodes`, `system:kube-scheduler`, etc. are Kubernetes' own
+built-in group names, already bound to built-in ClusterRoles before
+you've created a single RBAC object yourself. That's *why* the JSON
+templates above are so rigid: get the `O` field wrong and the cert still
+passes TLS verification fine (it's correctly signed), but `kube-apiserver`
+extracts a group nothing is bound to, and every request comes back `403`
+instead of a TLS error — a completely different failure to debug for. A
+missing SAN (a hostname/IP the cert doesn't list) fails at the TLS layer
+instead, before RBAC is ever consulted — which is exactly the failure
+mode the `master3` note right below walks through.
+
+The `service-account` key pair from §6 is deliberately not part of
+either diagram above — it's never presented in a TLS handshake at all.
+`kube-controller-manager` uses its private half to *sign* service
+account JWTs, and `kube-apiserver` uses the public half only to *verify*
+a token's signature — a completely different trust mechanism (JWT
+signing) riding on the same CA-issued keypair machinery for convenience.
+
 **Adding `master3` to an already-running 2-master cluster:** the
 `kubernetes` cert above was just regenerated with `master3`'s IP added to
 its SAN list — that's a *new* cert, not an update to the old one, so

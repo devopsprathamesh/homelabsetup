@@ -31,6 +31,33 @@ This writes into `~/.kube/config` on the client machine (kubectl's default
 location) rather than a standalone file, so it becomes your normal
 `kubectl` context immediately.
 
+### What's actually happening
+
+Every other kubeconfig in this guide (doc 03's per-node, per-master
+files) was written to a standalone path and always needs an explicit
+`--kubeconfig=...` flag to be used at all — that's deliberate, so a
+master's loopback `admin.kubeconfig` can't get used by accident from
+somewhere it shouldn't be. This doc is the one exception: it targets
+`~/.kube/config` specifically so it becomes the *ambient default*,
+resolved through a specific order every time `kubectl` runs with no
+flags:
+
+```mermaid
+flowchart TD
+    Start["kubectl runs any command"] --> Flag{"--kubeconfig or<br/>--context flag given?"}
+    Flag -->|yes| UseFlag["use exactly that"]
+    Flag -->|no| Env{"$KUBECONFIG set?"}
+    Env -->|yes| UseEnv["use that file's<br/>current-context"]
+    Env -->|no| Default["~/.kube/config's<br/>current-context<br/>← this doc sets this"]
+```
+
+That's also why every `kubectl` invocation you've seen so far in docs
+05/06/08/12 explicitly passes `--kubeconfig ~/k8s-the-hard-way/kubeconfig/admin.kubeconfig`
+— those run *before* this doc, or on a master where `~/.kube/config`
+was never populated, so there's no ambient default to fall back to yet.
+From here on, plain `kubectl get nodes` with no flags on the client
+machine resolves through the bottom path above.
+
 ## Verify
 
 ```bash

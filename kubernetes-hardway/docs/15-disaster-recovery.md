@@ -40,6 +40,23 @@ sudo ETCDCTL_API=3 etcdctl snapshot status \
   /var/backups/etcd/snapshot-*.db --write-out=table
 ```
 
+### What a snapshot actually captures
+
+```mermaid
+flowchart LR
+    T0["cluster running<br/>(Raft term N, growing log)"] --> Snap["snapshot taken:<br/>one point-in-time copy<br/>of the fully-replicated state"]
+    Snap --> T1["...more writes happen<br/>after the snapshot..."]
+    T1 --> Loss["data lost<br/>(all 3 /var/lib/etcd gone)"]
+    Loss --> Restore["restore: a brand-new cluster,<br/>pre-loaded with the snapshot's data"]
+```
+
+A snapshot isn't a diff or a change log — it's the entire key-value
+store as of one instant, taken from whichever single member you ran it
+on (any member works, since Raft replication means every member already
+has the full dataset, not a shard of it). That's also the exact
+boundary of what restoring gives back: everything as of that instant,
+nothing after it.
+
 A snapshot sitting only on the machine that might be the next thing to
 fail isn't a backup — copy it off-box. `server` is the natural place
 here (it's already the hub every other doc SSHes/scps through), though a
@@ -107,10 +124,28 @@ sudo ETCDCTL_API=3 etcdctl snapshot restore ~/snapshot-XXXXXXXX.db \
   --data-dir /var/lib/etcd
 ```
 
+```mermaid
+flowchart LR
+    subgraph Old["original cluster (doc 05)"]
+        OT["token: etcd-cluster-0"]
+        OM["one continuous Raft term,<br/>log keeps growing forever"]
+    end
+    subgraph New["restored cluster (this doc)"]
+        NT["token: etcd-cluster-1<br/>(must differ)"]
+        NM["brand-new Raft term,<br/>log starts over — pre-seeded<br/>with the snapshot's key-value data"]
+    end
+```
+
 `--initial-cluster-token` must be **different from the original**
 (`etcd-cluster-0` from [05](05-bootstrapping-etcd.md)) — a restore forms
 a brand-new Raft cluster identity that happens to start pre-loaded with
 the snapshot's key-value data; it isn't resuming the old cluster's term.
+The token is what members use during bootstrap to confirm they're all
+joining the *same* logical cluster and not accidentally mixing state
+with an unrelated one that happens to reuse the same IPs/ports — reusing
+the old token on a restore risks exactly that kind of identity
+collision, which is why etcd itself recommends always minting a new one
+here.
 `etcd.service` itself (`/etc/systemd/system/etcd.service` from
 [05](05-bootstrapping-etcd.md) §3) doesn't need edits — it already has
 `--initial-cluster-state new` and the same `--data-dir=/var/lib/etcd`,

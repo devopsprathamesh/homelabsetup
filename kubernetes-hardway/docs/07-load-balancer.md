@@ -58,6 +58,45 @@ closed apiserver port is the dominant failure mode in this lab. The `stats`
 listener on `:9000` is optional but useful for watching failover live —
 reachable at `http://192.168.56.10:9000/` (host-only network only).
 
+### What's actually happening
+
+The single most important line in this config is `mode tcp` — it's the
+difference between the LB being invisible to TLS and the LB silently
+breaking every client cert that passes through it:
+
+```mermaid
+flowchart TD
+    subgraph Good["mode tcp — what this doc configures"]
+        C1["client presents<br/>its own cert"] --> LB1["HAProxy: passthrough,<br/>bytes untouched"]
+        LB1 --> API1["kube-apiserver sees the<br/>real client cert — auth succeeds"]
+    end
+    subgraph Bad["mode http — TLS termination, wrong choice here"]
+        C2["client presents<br/>its own cert"] --> LB2["HAProxy: terminates TLS,<br/>opens a new connection to the backend"]
+        LB2 --> API2["kube-apiserver sees HAProxy's<br/>own TLS session — not the client's<br/>cert at all — auth fails"]
+    end
+```
+
+Every client in this guide — `kubectl`, `kubelet`, `kube-proxy` —
+authenticates with its own client certificate presented *directly* to
+`kube-apiserver` during the TLS handshake (doc 02/03). `mode http` would
+have HAProxy decrypt the incoming connection, inspect it as HTTP, then
+open a *separate* TLS connection to whichever master it picks — at which
+point the apiserver is doing a handshake with HAProxy, not with the
+original kubelet or kubectl, so the client cert never arrives. `mode tcp`
+skips all of that: HAProxy just relays raw bytes at the TCP layer,
+completely blind to what's inside, so the original TLS handshake
+(client cert included) reaches `kube-apiserver` unmodified. This is also
+why `option tcp-check` (not an HTTP health check) is the right choice —
+HAProxy isn't equipped to understand anything above TCP here, by design.
+
+One limitation worth knowing: `tcp-check` only proves the port is open,
+not that `kube-apiserver` is actually healthy — a hung or degraded
+apiserver process that still holds its listening socket open would keep
+looking "up" to HAProxy while genuinely failing requests. Good enough for
+this lab (a stopped process closing its socket is the failure mode
+[§4](#4-verify) below actually exercises), but worth knowing where the
+health check's blind spot is.
+
 ## 3. Validate and restart
 
 ```bash

@@ -70,6 +70,52 @@ done
 
 Expect `swapon --show` to print nothing, and both sysctls to read `= 1`.
 
+### What's actually happening
+
+Swap is a hard gate, checked once at startup:
+
+```mermaid
+flowchart LR
+    Start["kubelet starts"] --> Check{"/proc/swaps empty?"}
+    Check -->|yes| OK["kubelet runs normally"]
+    Check -->|"no — swap present"| Fail["kubelet exits immediately<br/>(fail-swap-on defaults to true)"]
+```
+
+Kubelet's resource accounting (QoS classes, eviction thresholds, cgroup
+memory limits) assumes a container that hits its memory limit gets OOM
+killed — a deterministic, visible failure. Swap breaks that assumption
+(the container just gets slow instead), so rather than run with unclear
+semantics, kubelet refuses to start at all. This isn't a warning you can
+miss; it's the whole reason the doc says "will refuse to start."
+
+The two sysctls matter for a completely different reason — they're
+gates in the kernel's own packet path, not kubelet's:
+
+```mermaid
+flowchart LR
+    Pod["pod sends a packet<br/>(e.g. to a ClusterIP)"] --> Bridge["cnio0 bridge"]
+    Bridge -->|"bridge-nf-call-iptables=1"| IPT["iptables:<br/>kube-proxy's KUBE-SERVICES chain"]
+    IPT --> Route{"destination is local?"}
+    Route -->|"no — needs ip_forward=1"| Out["forwarded out enp0s8/enp0s3"]
+    Route -->|yes| Local["delivered locally"]
+```
+
+By default, Linux bridges are pure L2 switches — traffic crossing one
+never touches the `iptables`/netfilter stack at all.
+`bridge-nf-call-iptables=1` is what makes bridged traffic visible to
+`iptables` in the first place. Without it, every rule `kube-proxy`
+programs into its `KUBE-SERVICES` chain (see
+[12 §7 — Services](12-smoke-test.md#7-services-nodeport)) would simply
+never be consulted for pod-to-pod or pod-to-Service traffic — the packet
+would just pass through as if Services didn't exist, even though
+`kube-proxy` itself is running fine and the rules genuinely exist.
+Separately, `net.ipv4.ip_forward=1` is what lets
+this Linux box act as a router at all — by default a Linux host only
+accepts packets addressed to *itself* and drops everything else at the
+IP layer. Without it, [10 — Pod Network Routes](10-pod-network-routes.md)'s
+entire static-route setup would sit in the routing table doing nothing —
+routes present, but the kernel refusing to actually forward along them.
+
 ## 3. Install client-side tools
 
 **Run on:** client machine.

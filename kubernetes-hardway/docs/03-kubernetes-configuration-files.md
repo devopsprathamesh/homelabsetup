@@ -17,6 +17,52 @@ mkdir -p kubeconfig
 LB_IP=192.168.56.10
 ```
 
+### What's actually happening
+
+Every `kubectl config set-*` call below is editing the same underlying
+structure — three parts, one file:
+
+```mermaid
+flowchart LR
+    subgraph KC["a .kubeconfig file"]
+        Cluster["cluster:<br/>server URL + CA cert"]
+        User["user:<br/>client cert + key"]
+        Context["context:<br/>binds one cluster to one user"]
+    end
+    Context --> Use["current-context:<br/>which pairing actually gets used"]
+```
+
+And here's what that structure is *for*, once a process actually starts
+using the file:
+
+```mermaid
+flowchart LR
+    Proc["kubelet / kube-proxy starts<br/>--kubeconfig=..."] --> Resolve["resolve current-context<br/>→ one cluster + one user"]
+    Resolve --> Dial["dial cluster.server"]
+    Dial --> Verify["verify the server's cert<br/>against cluster.certificate-authority"]
+    Verify --> Present["present user.client-certificate<br/>as this process's own identity"]
+```
+
+`--embed-certs=true` inlines the actual PEM bytes into the kubeconfig
+(base64'd) rather than storing a file path — that's why these files are
+self-contained and safe to `scp` to another machine without also copying
+`certificates/` alongside them.
+
+`cluster.server` is the field worth being paranoid about: it's just a
+string, built here from a shell variable
+(`--server=https://${LB_IP}:6443`), and nothing checks it's sane at
+generation time. If `LB_IP` was ever empty in the shell that ran this —
+easy to hit if the `LB_IP=192.168.56.10` line above and the block that
+uses it end up run in separate sessions — the embedded server URL
+becomes literally `https://:6443`. That's not a parse error; an empty
+host in a URL is treated as `localhost`, so the process quietly tries to
+reach an apiserver on *itself* instead of the LB, gets connection
+refused (nothing listens on `:6443` locally), and every symptom points
+at networking when the actual bug is a blank variable baked into a file
+minutes earlier. Worth grepping for directly if something downstream
+can't reach the API server for no visible reason:
+`grep server: kubeconfig/*.kubeconfig`.
+
 ## 1. kubelet kubeconfigs (one per worker node)
 
 ```bash

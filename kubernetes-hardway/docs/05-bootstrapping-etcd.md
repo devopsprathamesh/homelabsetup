@@ -128,6 +128,64 @@ sudo ETCDCTL_API=3 etcdctl member list \
 Expect three members listed, all `started`, pointing at `.11:2380`,
 `.12:2380`, and `.16:2380`.
 
+### What's actually happening
+
+Two separate ports, two separate jobs — worth not conflating them:
+
+```mermaid
+flowchart LR
+    subgraph Cluster["etcd cluster"]
+        M1["master1<br/>:2380 peer"]
+        M2["master2<br/>:2380 peer"]
+        M3["master3<br/>:2380 peer"]
+        M1 <-->|Raft consensus| M2
+        M2 <-->|Raft consensus| M3
+        M1 <-->|Raft consensus| M3
+    end
+    API["kube-apiserver<br/>(any master, or itself)"] -->|"client traffic :2379"| M1
+```
+
+`:2380` (`--listen-peer-urls`) is exclusively etcd-to-etcd Raft traffic —
+leader election and log replication, authenticated with the peer cert
+flags. `:2379` (`--listen-client-urls`) is what `kube-apiserver` actually
+talks to; it never touches `:2380` at all. Confusing the two when
+reading `--initial-cluster master1=https://...:2380,...` is an easy
+mistake — that list is peer addresses, not where you'd point an
+apiserver.
+
+What quorum actually buys you, on a write:
+
+```mermaid
+flowchart LR
+    Write["a write arrives<br/>e.g. kubectl create namespace"] --> Leader["etcd leader<br/>(one of the 3, Raft-elected)"]
+    Leader -->|replicate| F1["follower"]
+    Leader -->|replicate| F2["follower"]
+    F1 -->|ack| Leader
+    F2 -->|ack| Leader
+    Leader --> Commit{"2 of 3 acked?"}
+    Commit -->|yes| Success["committed —<br/>acknowledged back to apiserver"]
+    Commit -->|"no — quorum lost"| Hang["request hangs,<br/>no majority to commit to"]
+```
+
+A write only counts as durable once a *majority* of members have it on
+disk — for 3 members that's 2, which is exactly why losing any single
+one still lets the cluster keep accepting writes (the surviving 2 are
+still a majority of 3), but losing a second one stops it cold: 1
+survivor can't out-vote nothing, so every write (and even reads, which
+also require a quorum round-trip by default) just hangs rather than
+serving possibly-stale data. That boundary — one loss tolerated, two
+losses not — is exactly what
+[14 §5](14-ha-deep-dive.md#5-the-etcd-quorum-boundary--where-ha-stops-and-dr-starts)
+demonstrates live, and it's *why* an odd member count matters at all
+(see [the README](../README.md#etcd-fault-tolerance)): an even count
+would need the exact same majority to survive a loss, for no added
+tolerance, just a wasted member.
+
+This is also why `master3` joining an already-running cluster
+(§6 below) can't just start up on its own with the full member list —
+until the existing members explicitly `member add` it, it isn't part of
+anyone's quorum math yet, so nothing it says would count as a vote.
+
 ## 6. Adding master3 to an already-running cluster
 
 Only relevant if `master1`/`master2` etcd were already up and running

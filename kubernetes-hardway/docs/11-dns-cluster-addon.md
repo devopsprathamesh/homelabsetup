@@ -193,6 +193,51 @@ inside `SERVICE_CIDR` (`10.32.0.0/24`) from the apiserver flags in
 values, edit `clusterIP:` above (and the Corefile's `kubernetes` zone if you
 changed `clusterDomain`) to match before applying.
 
+### What's actually happening
+
+A pod never picks its DNS server itself — `kubelet` writes it into every
+pod's `/etc/resolv.conf` at creation time, straight from its own
+`clusterDNS`/`clusterDomain` config (doc 08 §7), which is *why* changing
+those values means editing this manifest to match rather than the other
+way around:
+
+```mermaid
+flowchart LR
+    Pod["app pod queries<br/>e.g. kubernetes.default"] -->|"resolv.conf: nameserver 10.32.0.10<br/>(injected by kubelet)"| Dial["dial 10.32.0.10:53"]
+    Dial -->|"kube-proxy iptables DNAT"| CoreDNS["one of the 2 CoreDNS pods"]
+    CoreDNS -->|"cluster.local zone"| Answer["answered from CoreDNS's own<br/>watch of Services / EndpointSlices"]
+```
+
+That DNAT hop is the same `kube-proxy` mechanism every ClusterIP uses
+([12 §7](12-smoke-test.md#7-services-nodeport)) — nothing DNS-specific
+about it, which matters for a subtler reason below.
+
+CoreDNS itself has two separate outbound paths, and conflating them is
+an easy mistake:
+
+```mermaid
+flowchart LR
+    CD["CoreDNS pod"] -->|"kubernetes plugin:<br/>watches Services/Pods/EndpointSlices"| API["kube-apiserver<br/>— via the kubernetes Service,<br/>same as any other pod"]
+    CD -->|"forward plugin:<br/>anything outside cluster.local"| Node["the node's own /etc/resolv.conf<br/>(dnsPolicy: Default, not ClusterFirst)"]
+```
+
+The `kubernetes` plugin doesn't get cluster state some special way — it
+watches the API server exactly like `kubelet` or `kube-proxy` do, through
+the `kubernetes` Service's ClusterIP (`10.32.0.1`), subject to the same
+`kube-proxy` DNAT as the top diagram. That's a real circular-looking
+dependency worth being aware of: if `kube-proxy` isn't
+routing Service traffic correctly, CoreDNS's own pod gets stuck logging
+`Still waiting on: "kubernetes"` and never becomes `Ready` — a completely
+different failure from "DNS lookups from *other* pods are timing out,"
+even though both trace back to the same broken `kube-proxy`.
+
+The `forward` plugin's target — the *node's* resolver, not
+`10.32.0.10` — is also deliberate, not an oversight: CoreDNS runs with
+`dnsPolicy: Default` instead of the `ClusterFirst` every other pod gets
+by default, specifically so its own upstream (non-`cluster.local`)
+lookups don't loop back into itself. Doc 08 §7's note about avoiding
+"resolution loops" is this exact mechanism, from the other side.
+
 ## Verify
 
 ```bash

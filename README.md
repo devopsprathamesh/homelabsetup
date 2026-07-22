@@ -1,4 +1,54 @@
-# Home Lab: HA Kubernetes on VirtualBox + Vagrant
+# Home Lab: Kubernetes from Scratch to Production
+
+A six-stage learning path that takes you from zero to architect-level
+Kubernetes: first the **manual** way (every certificate, every systemd unit,
+by hand), then the **automated** way (Ansible/Kubespray), then the
+**cloud-managed** way (EKS — first raw AWS CLI, then full production
+Terraform + GitOps with HA and multi-region DR).
+
+## The learning path
+
+```mermaid
+flowchart LR
+    subgraph Foundation["Foundation (local VMs)"]
+        S1["1. Vagrant lab<br/>7 VirtualBox VMs"]
+        S2["2. Ansible basics<br/>hostnames, time sync"]
+    end
+    subgraph Manual["Manual — learn every moving part"]
+        S3["3. Kubernetes<br/>the hard way<br/>(certs, etcd, HA,<br/>Cilium, DR)"]
+    end
+    subgraph Automated["Automated — same cluster, zero hand-steps"]
+        S4["4. Kubespray<br/>via Ansible<br/>(scale, upgrade,<br/>HA/DR drills)"]
+    end
+    subgraph Cloud["Cloud managed — AWS EKS"]
+        S5["5. EKS plain setup<br/>raw AWS CLI<br/>(VPC, Pod Identity,<br/>Karpenter, ALB)"]
+        S6["6. EKS production<br/>Terraform + GitOps<br/>(Istio, ArgoCD,<br/>multi-region DR)"]
+    end
+    S1 --> S2 --> S3 --> S4 --> S5 --> S6
+```
+
+Each stage reuses the mental model built by the previous one: stage 3 teaches
+what every component *is*, stage 4 shows how automation assembles the same
+components, stage 5 shows what AWS manages for you (and what it doesn't), and
+stage 6 is what you'd actually run in production.
+
+| Stage | Directory | What you learn | Level |
+|-------|-----------|----------------|-------|
+| 1 | [`1.vagrant/`](1.vagrant/) (this README, below) | Build the 7-node VM lab all later stages run on | Beginner |
+| 2 | [`2.ansible/`](2.ansible/README.md) | Ansible fundamentals against real hosts | Beginner |
+| 3 | [`3.kubernetes-hardway/`](3.kubernetes-hardway/README.md) | Every k8s component by hand: CA/TLS, etcd + Raft, HA control plane, kubelet/CNI, CoreDNS, Cilium, HA failure drills, etcd DR | Intermediate |
+| 4 | [`4.kubernetes-with-kubespray-via-ansible/`](4.kubernetes-with-kubespray-via-ansible/README.md) | Production-style automated install: inventory design, HAProxy LB, scaling, rolling upgrades, hardening, HA/DR runbooks | Intermediate–Advanced |
+| 5 | [`5.eks-plainsetup/`](5.eks-plainsetup/README.md) | EKS with nothing but the AWS CLI: VPC, control plane, node groups, Pod Identity, Cluster Autoscaler vs Karpenter, ALB controller | Advanced |
+| 6 | [`6.eks-setup-from-scratch/`](6.eks-setup-from-scratch/README.md) | Production EKS: Terraform modules, Istio mesh, ArgoCD GitOps, progressive delivery, observability, multi-AZ HA, multi-region DR with runbooks | Architect |
+
+**Where to start:** if you're new to Kubernetes, go strictly in order — stages
+3 and 4 run on the VMs stage 1 creates. If you only care about EKS, stages 5
+and 6 are self-contained on AWS (stage 5's docs assume you know what the
+components *do*, which is what stages 3–4 teach).
+
+---
+
+# Stage 1: HA Kubernetes lab on VirtualBox + Vagrant
 
 Automates creation of a 7-node lab for a highly-available Kubernetes cluster,
 running as local VirtualBox VMs and orchestrated with a single Vagrantfile.
@@ -20,7 +70,7 @@ every node's `/etc/hosts`).
 ## Repo layout
 
 ```
-vagrant/
+1.vagrant/
   Vagrantfile                 # defines all 7 machines
   scripts/provision-common.sh # shared provisioning, run on every node
   scripts/provision-server.sh # server-only: SSH key install + ansible/python3/terraform
@@ -71,7 +121,7 @@ Confirmed working on: 16-core host, 30GB RAM, 400GB+ free disk.
 ## Usage
 
 ```bash
-cd vagrant
+cd 1.vagrant
 
 vagrant validate        # sanity-check the Vagrantfile
 vagrant up               # bring up all 6 nodes
@@ -84,7 +134,7 @@ vagrant destroy -f        # tear down all nodes
 
 ## What each node gets on boot
 
-`vagrant/scripts/provision-common.sh` runs on every node via the shell
+`1.vagrant/scripts/provision-common.sh` runs on every node via the shell
 provisioner:
 
 - Adds all 6 lab nodes to `/etc/hosts` (idempotent — safe to re-provision).
@@ -116,10 +166,10 @@ you've decided on a k8s version and CNI (Calico/Flannel/Cilium).
 
 ### Keyless SSH from `server` + automation tooling
 
-The first `vagrant up` generates an ED25519 keypair at `vagrant/keys/`
+The first `vagrant up` generates an ED25519 keypair at `1.vagrant/keys/`
 (gitignored — never commit it). The public half is trusted by every node's
 `admin` user; the private half is installed only on `server`
-(`vagrant/scripts/provision-server.sh`, via a `file` provisioner + a
+(`1.vagrant/scripts/provision-server.sh`, via a `file` provisioner + a
 server-only shell provisioner), along with an SSH client config that skips
 host-key prompts for the lab's nodes (by hostname and by
 `192.168.56.0/24` IP). From `server`, as `admin`:
@@ -135,7 +185,7 @@ rest of the cluster. No Ansible inventory or Terraform config is set up yet
 — just the tooling and passwordless access to build on.
 
 If you ever want a fresh keypair (e.g. suspected compromise), delete
-`vagrant/keys/` and re-run `vagrant provision` on every node — a new key
+`1.vagrant/keys/` and re-run `vagrant provision` on every node — a new key
 will be generated and redistributed automatically.
 
 ### Keyless SSH from this desktop
@@ -199,7 +249,7 @@ NODES = [
 - **Change the network range:** update every `ip:` in `NODES` — they must
   all stay on the same subnet for the private network to work.
 - **Add provisioning steps** (e.g. install containerd/kubeadm): extend
-  `vagrant/scripts/provision-common.sh`, or add a second
+  `1.vagrant/scripts/provision-common.sh`, or add a second
   `machine.vm.provision "shell", path: "..."` block in the Vagrantfile if a
   node needs something the others don't (e.g. HAProxy only on `server`).
 - **Switch to linked clones** (faster VM creation, much less disk usage, at
@@ -217,7 +267,7 @@ indented terminator line never matched, so the bash heredoc swallowed the
 rest of the script as literal text into `/etc/hosts` — silently skipping the
 swap/sysctl/kernel-module steps and corrupting the hosts file. Fixed by
 moving provisioning into a real script file
-(`vagrant/scripts/provision-common.sh`), referenced from the Vagrantfile via
+(`1.vagrant/scripts/provision-common.sh`), referenced from the Vagrantfile via
 `path:` instead of an inline heredoc, with `HOSTS_ENTRIES` passed in as an
 environment variable. Verified fixed with a full smoke test (swap off,
 sysctls set, kernel modules loaded, `/etc/hosts` correct, ping between
@@ -248,7 +298,7 @@ self-contained with no shared dependency. To switch back, add
 
 ## Security note
 
-The initial commit accidentally included `vagrant/.vagrant/` (Vagrant's
+The initial commit accidentally included `1.vagrant/.vagrant/` (Vagrant's
 local per-VM state, including auto-generated SSH private keys) and
 `vmachines/.claude/settings.local.json` (local tool settings). This was
 fixed in a follow-up commit — both are now untracked via `.gitignore` and

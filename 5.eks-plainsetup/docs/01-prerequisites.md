@@ -10,11 +10,31 @@
 | [helm](https://helm.sh/docs/intro/install/) | 3.x | used for the AWS Load Balancer Controller ([07](07-metrics-server-and-alb-ingress.md)) and Karpenter ([06](06-node-autoscaling.md), if you choose that path) |
 | `curl` | — | downloading IAM policy JSON and CRDs from upstream GitHub repos |
 
+Verify each tool is present and new enough before starting:
+
+```bash
+aws --version          # expect aws-cli/2.15+ 
+kubectl version --client
+jq --version
+helm version --short   # expect v3.x
+curl --version | head -1
+```
+
 ## AWS account
 
 - An IAM principal with permissions to create VPCs/subnets/route tables/NAT gateways, IAM roles/policies, EKS clusters/nodegroups/addons/pod-identity-associations, and EC2 instances/launch templates. `AdministratorAccess` is the pragmatic starting point for a first build.
 - Enough EIP quota for at least one NAT Gateway (default account quota is 5, this build uses 1).
 - If you plan to use **Karpenter** (see [06-node-autoscaling.md](06-node-autoscaling.md)) rather than Cluster Autoscaler, no extra account setup is needed now — its IAM role and instance profile are created in that doc.
+
+Confirm your credentials work and you're in the account/principal you think
+you are — every doc after this creates billable resources under whatever
+this returns:
+
+```bash
+aws sts get-caller-identity
+# expect your Account id and an Arn for the intended user/role — if this
+# errors, fix `aws configure` / SSO login before going any further
+```
 
 ## Export environment variables
 

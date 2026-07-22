@@ -53,3 +53,12 @@ The only architectural difference from the [07 — Ingress & DNS](../architectur
 ## When to actually build this
 
 Build it as a **deliberate, separate change** once: (a) you have a concrete multi-region-write-capable data layer decision, and (b) you've measured that Tier 2's RTO genuinely doesn't meet your SLA. At that point, the Terraform change itself is small (resize `dr-prod`, flip the `route53-failover` module's `mode` variable) — the real work is entirely in the data layer, which is outside this repo's scope.
+
+## Verify it yourself
+
+Confirm what mode the platform is in *today* (this doc is the not-yet-built tier):
+
+```bash
+grep -rn 'mode' terraform/live/global/main.tf | grep -i failover   # route53-failover module still in "failover" (active-passive) mode
+dig app.example.com                                                # always resolves to the primary NLB — latency routing would vary by resolver location
+```

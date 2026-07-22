@@ -39,6 +39,48 @@ aws eks create-cluster \
 aws eks wait cluster-active --name $CLUSTER_NAME   # takes ~10 minutes
 ```
 
+## What `create-cluster` actually does under the hood
+
+The ~10 minutes you spend in `aws eks wait cluster-active` is AWS building a
+full HA control plane — the same components you built by hand in
+[3.kubernetes-hardway](../../3.kubernetes-hardway/README.md), just invisible
+to you:
+
+```mermaid
+sequenceDiagram
+    participant You as aws eks create-cluster
+    participant EKS as EKS service
+    participant AWSVPC as AWS-owned VPC (hidden)
+    participant YourVPC as your VPC (doc 02)
+    You->>EKS: create-cluster (role, subnets, endpoint config)
+    EKS->>EKS: assume your cluster role<br/>(the trust policy above is what permits this)
+    EKS->>AWSVPC: launch apiserver + etcd across ≥2 AZs,<br/>behind an AWS-managed NLB
+    EKS->>YourVPC: inject cross-account ENIs into your subnets<br/>("Amazon EKS" ENIs — visible in the EC2 console)
+    Note over YourVPC: those ENIs are how the control plane reaches<br/>INTO your VPC: webhooks, kubectl exec/logs,<br/>apiserver→kubelet traffic
+    EKS-->>You: status ACTIVE + public endpoint URL
+```
+
+Key mental-model points:
+
+- **etcd, apiserver, scheduler, controller-manager run in an AWS-owned
+  account/VPC you can never see or SSH into.** AWS handles their HA,
+  patching, and etcd backups — that's what the ~$0.10/hour cluster fee buys.
+- **The cross-account ENIs are the only bridge into your VPC.** Traffic *to*
+  the apiserver goes to the managed NLB endpoint; traffic *from* the control
+  plane to your nodes (e.g. `kubectl logs`, admission webhooks) comes out of
+  those ENIs. This is why the cluster needs your subnet IDs even though no
+  control-plane instance lives there.
+- **Endpoint flags**: `endpointPublicAccess=true` puts the apiserver on a
+  public URL (IAM-authenticated, but internet-reachable — restrict with
+  `publicAccessCidrs` for anything real); `endpointPrivateAccess=true` also
+  makes it resolvable/reachable inside the VPC, which is how the private-
+  subnet nodes in [04](04-node-group.md) will connect without traversing NAT.
+- **Authentication is IAM, not client certs**: `kubectl` will call
+  `aws eks get-token` (SigV4-signed STS request) per command; the apiserver
+  validates it and maps the IAM principal to a Kubernetes user/group. The
+  IAM principal that runs `create-cluster` becomes cluster admin
+  automatically.
+
 ## Configure kubectl
 
 ```bash

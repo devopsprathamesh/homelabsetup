@@ -83,3 +83,12 @@ CoreDNS runs on the tainted "core" node group with a `topologySpreadConstraint` 
 ## External (client-facing) DNS resolution
 
 Covered end-to-end, with the full request path past DNS resolution, in [07 — Ingress & DNS](07-ingress-dns.md).
+
+## Verify it yourself
+
+```bash
+aws ec2 describe-subnets --filters "Name=tag:Name,Values=*eks-platform*" \
+  --query 'Subnets[].{az:AvailabilityZone,cidr:CidrBlock,name:Tags[?Key==`Name`]|[0].Value}' --output table   # 3 tiers × 3 AZs
+kubectl get pods -o wide -A | head    # pod IPs are real VPC IPs from the private subnets (VPC CNI)
+kubectl run dns-test --image=busybox --rm -it --restart=Never -- nslookup kubernetes.default.svc.cluster.local   # in-cluster DNS path from the diagram
+```

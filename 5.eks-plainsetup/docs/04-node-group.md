@@ -48,6 +48,43 @@ aws eks wait nodegroup-active --cluster-name $CLUSTER_NAME --nodegroup-name core
 kubectl get nodes -o wide   # 2 nodes, Ready
 ```
 
+## What `create-nodegroup` actually does under the hood
+
+A "managed node group" is EKS orchestrating plain EC2 primitives on your
+behalf — all of it visible in your account, unlike the control plane:
+
+```mermaid
+sequenceDiagram
+    participant You as aws eks create-nodegroup
+    participant EKS as EKS service
+    participant EC2 as EC2 (your account)
+    participant Node as new instance
+    participant API as EKS apiserver
+    You->>EKS: create-nodegroup (role, subnets, scaling config)
+    EKS->>EC2: create launch template<br/>(EKS-optimized AL2023 AMI + user data)
+    EKS->>EC2: create Auto Scaling Group<br/>(min 2 / max 6 / desired 2, private subnets)
+    EC2->>Node: launch instances
+    Node->>Node: cloud-init runs nodeadm: reads cluster name,<br/>endpoint, CA from user data; configures<br/>containerd + kubelet
+    Node->>API: kubelet connects (private endpoint),<br/>authenticates via the NODE ROLE's<br/>instance credentials
+    API->>API: node role is pre-authorized by EKS<br/>(access entry) → kubelet may register
+    Node->>API: register Node object, report Ready<br/>(Ready requires the CNI — see doc 05)
+```
+
+What each attached policy is for, mapped to that flow:
+`AmazonEKSWorkerNodePolicy` lets the node describe EKS/EC2 resources during
+bootstrap; `AmazonEC2ContainerRegistryReadOnly` lets containerd pull images
+from ECR (where all EKS system images live); `AmazonSSMManagedInstanceCore`
+is purely for your shell access. The kubelet's *Kubernetes* identity comes
+from the node role too — EKS automatically creates an access entry mapping
+it into the `system:nodes` group, which is the managed equivalent of the
+kubelet kubeconfigs you hand-built in the hard way.
+
+Because it's just an ASG underneath, node replacement on failure, rolling
+AMI upgrades, and graceful drain-on-scale-down are EKS-driven ASG
+operations — you'll see the ASG itself in the EC2 console named
+`eks-core-ng-...`. (Don't edit that ASG directly; EKS owns it and will
+fight you.)
+
 If you plan to use **Karpenter** for autoscaling instead of Cluster Autoscaler (see [06-node-autoscaling.md](06-node-autoscaling.md)), this node group still matters — it hosts your baseline/system workloads (CoreDNS, the ALB controller, Karpenter's own controller pods), while Karpenter provisions additional capacity on top for everything else. Don't skip it.
 
 ## Resume variables (new shell)

@@ -5,6 +5,29 @@ All of this runs on `server`, inside `~/kubespray`. These edits go in
 populated with Kubespray's defaults — you're overriding a handful of keys,
 not writing from scratch.
 
+## How a variable actually gets its value
+
+Before editing anything, understand where a value can come from — this is
+the model behind both step 6's sanity check and the "my change didn't take
+effect" entry in [12 — Troubleshooting](12-troubleshooting.md):
+
+```mermaid
+flowchart TD
+    RD["Kubespray role defaults<br/>(roles/*/defaults/main.yml)"] --> GA
+    GA["group_vars/all/*.yml<br/>(every .yml in the dir is merged,<br/>alphabetical file order)"] --> GG
+    GG["group_vars/&lt;group&gt;/*.yml<br/>e.g. k8s_cluster/, etcd.yml<br/>(more specific group wins)"] --> HV
+    HV["host_vars/&lt;host&gt;.yml<br/>(per-host, rarely used here)"] --> EX
+    EX["-e / --extra-vars on the CLI<br/>(always wins)"] --> FINAL["value the play actually uses"]
+    style FINAL stroke-width:3px
+```
+
+Lower boxes override upper ones. The trap in this lab isn't the precedence
+between levels — it's *within* one level: `group_vars/all/` is a directory,
+and Ansible loads **every** `.yml` file in it and merges them. Two files
+defining the same key resolve by file-load order, silently. So if an
+override "didn't take", grep the whole tree for the key before assuming
+precedence is broken (step 6 and doc 12 both do exactly this).
+
 ## 1. `group_vars/all/all.yml` — the external load balancer
 
 This is the single most important override for an HA setup like this one:

@@ -36,8 +36,14 @@ docs/
   architecture/    # how the platform works, with Mermaid diagrams
   dr-ha/           # HA and DR strategies, three tiers
   runbooks/        # step-by-step operational procedures
-scripts/           # bootstrap helpers
+scripts/           # operational helpers (see below)
 ```
+
+The three scripts:
+
+- [`scripts/bootstrap.sh`](scripts/bootstrap.sh) — one-time S3 state-backend creation (step 1 of the install guide).
+- [`scripts/kubeconfig.sh`](scripts/kubeconfig.sh) — `kubeconfig.sh <staging|prod|dr-prod>` switches your kubectl context to the right cluster/region and sanity-checks it with `kubectl get nodes`.
+- [`scripts/dr-failover.sh`](scripts/dr-failover.sh) — interactive checklist-runner for the first half of [docs/runbooks/dr-failover-runbook.md](docs/runbooks/dr-failover-runbook.md); read the runbook before using it.
 
 ## Terraform / GitOps ownership boundary
 

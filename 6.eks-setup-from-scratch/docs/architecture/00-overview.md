@@ -65,3 +65,13 @@ flowchart TB
 8. [08 — Canary & Blue-Green](08-progressive-delivery-canary-bluegreen.md) — how deployments actually roll out
 9. [../dr-ha/](../dr-ha/) — HA and DR, all three tiers
 10. [../runbooks/](../runbooks/) — what to actually run during an incident
+
+## Verify it yourself
+
+Quick whole-platform pulse check against a live cluster (`scripts/kubeconfig.sh <env>` first):
+
+```bash
+kubectl get nodes -o wide                                   # nodes across ≥2 AZs, Ready
+kubectl get pods -n istio-system -n argocd 2>/dev/null; kubectl get pods -n kube-system | grep -Ev 'Running|Completed'   # nothing unhealthy
+kubectl get applications -n argocd                          # ArgoCD apps Synced/Healthy
+```

@@ -87,3 +87,13 @@ Full step-by-step commands: [../runbooks/dr-failover-runbook.md](../runbooks/dr-
 
 - **RPO** (data loss window): bounded by the Velero backup schedule — daily by default (`0 3 * * *`), so up to ~24h of application state (excluding anything ArgoCD/Git already keeps in sync). Tighten the schedule if your data-loss tolerance is smaller; it's a direct cost/RPO trade-off.
 - **RTO** (time to recover service): minutes, not hours — the cluster, Istio, ArgoCD, and Karpenter are already running; the work during failover is Velero restore + scaling app replicas + Karpenter provisioning nodes, not standing up infrastructure from scratch.
+
+## Verify it yourself
+
+Confirm the standby is actually warm without triggering anything:
+
+```bash
+scripts/kubeconfig.sh dr-prod && kubectl get nodes           # DR cluster live in us-west-2
+velero backup get                                            # recent backups visible from the shared bucket (RPO check)
+aws route53 list-health-checks --query 'HealthChecks[].{id:Id,type:HealthCheckConfig.Type,target:HealthCheckConfig.FullyQualifiedDomainName}'   # primary health check exists and is being evaluated
+```

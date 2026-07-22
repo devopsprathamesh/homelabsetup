@@ -2,6 +2,8 @@
 
 Use this when the primary region (`us-east-1`) is confirmed down — not for a single-AZ issue (Tier 1 HA handles that automatically, see [../dr-ha/01-single-region-multi-az-ha.md](../dr-ha/01-single-region-multi-az-ha.md); nothing in this runbook should be needed for an AZ failure).
 
+**Scripted path:** [`scripts/dr-failover.sh`](../../scripts/dr-failover.sh) walks steps 0–3 of this runbook interactively (kubeconfig switch, Velero restore, scale-up, DNS check), prompting for confirmation at each decision point. It is a checklist-runner, not one-button failover — read this runbook first either way, and note steps 4–6 (smoke test, comms, failback) stay manual by design.
+
 ## Flow
 
 ```mermaid
@@ -39,6 +41,7 @@ Route53's health check on the primary NLB will already have started routing new 
 
 ```bash
 aws eks update-kubeconfig --name eks-platform-dr-prod --region us-west-2
+# equivalently: scripts/kubeconfig.sh dr-prod
 
 # Confirm Velero can see the shared backup bucket and recent backups exist
 velero backup get

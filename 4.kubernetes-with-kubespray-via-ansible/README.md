@@ -2,8 +2,8 @@
 
 A production-pattern Kubernetes install using [Kubespray](https://github.com/kubernetes-sigs/kubespray)
 (the SIG Cluster Lifecycle Ansible playbooks) against the same 7 VMs
-provisioned by [`../vagrant/`](../vagrant/) — the alternative path to
-[`../kubernetes-hardway/`](../kubernetes-hardway/), which builds the same
+provisioned by [`../1.vagrant/`](../1.vagrant/) — the alternative path to
+[`../3.kubernetes-hardway/`](../3.kubernetes-hardway/), which builds the same
 cluster by hand instead.
 
 ## Topology

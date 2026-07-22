@@ -62,8 +62,12 @@ You'll get the real bucket names from Step 2 below — **do not hand-guess the a
 ```bash
 cd eks-setup-from-scratch
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-grep -rl "ACCOUNT_ID" terraform/ | xargs sed -i '' "s/ACCOUNT_ID/${ACCOUNT_ID}/g"   # macOS (BSD sed)
-# grep -rl "ACCOUNT_ID" terraform/ | xargs sed -i "s/ACCOUNT_ID/${ACCOUNT_ID}/g"   # Linux (GNU sed)
+
+# Portable in-place sed: BSD (macOS) needs -i '', GNU (Linux) needs bare -i.
+# This wrapper picks the right form and is reused in step 1b:
+sedi() { if sed --version >/dev/null 2>&1; then sed -i "$@"; else sed -i '' "$@"; fi; }
+
+grep -rl "ACCOUNT_ID" terraform/ | xargs sedi "s/ACCOUNT_ID/${ACCOUNT_ID}/g"
 ```
 
 ### 1b. Domain and repo placeholders
@@ -74,12 +78,12 @@ ZONE="example.com"                # replace with your real hosted zone
 REPO_URL="https://github.com/your-org/eks-setup-from-scratch.git"   # replace with your real repo URL
 
 grep -rl "example\.com" . --include="*.tf" --include="*.yaml" --include="*.md" \
-  | xargs sed -i '' "s/example\.com/${ZONE}/g"     # macOS
+  | xargs sedi "s/example\.com/${ZONE}/g"
 grep -rl "your-org/eks-setup-from-scratch" . --include="*.tf" --include="*.yaml" \
-  | xargs sed -i '' "s#https://github.com/your-org/eks-setup-from-scratch.git#${REPO_URL}#g"   # macOS
+  | xargs sedi "s#https://github.com/your-org/eks-setup-from-scratch.git#${REPO_URL}#g"
 ```
 
-(Drop the `''` after `-i` on Linux/GNU sed.) Review the diff afterward (`git diff`) — a couple of files use `app.example.com` specifically (the client-facing FQDN) versus `*.example.com`/`example.com` (the zone and wildcard cert) — [`kubernetes/istio/gateway.yaml`](../kubernetes/istio/gateway.yaml), [`kubernetes/istio/cluster-issuer.yaml`](../kubernetes/istio/cluster-issuer.yaml), and the `overlays/*/kustomization.yaml` VirtualService host patches are the ones to check by hand if your subdomain isn't literally `app`.
+(`sedi` is the portable wrapper defined in step 1a — define it in this shell if you skipped that block.) Review the diff afterward (`git diff`) — a couple of files use `app.example.com` specifically (the client-facing FQDN) versus `*.example.com`/`example.com` (the zone and wildcard cert) — [`kubernetes/istio/gateway.yaml`](../kubernetes/istio/gateway.yaml), [`kubernetes/istio/cluster-issuer.yaml`](../kubernetes/istio/cluster-issuer.yaml), and the `overlays/*/kustomization.yaml` VirtualService host patches are the ones to check by hand if your subdomain isn't literally `app`.
 
 ### 1c. Terraform variable files
 

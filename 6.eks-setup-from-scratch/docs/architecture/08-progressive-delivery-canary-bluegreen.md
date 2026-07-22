@@ -57,6 +57,34 @@ flowchart TB
 
 **When to use it**: changes too risky or too structurally different to canary safely (schema migrations paired with app changes, anything where serving two versions simultaneously to real users is unacceptable), or where you want a guaranteed-instant, single-command rollback rather than a weight ramp-down. Costs 2x replica capacity for the `scaleDownDelaySeconds` window.
 
+### Actually switching an app to blue-green
+
+The example manifest is a drop-in replacement for the canary `Rollout`, wired into the same kustomize base. To switch `example-app` in one environment (staging shown — do it there first):
+
+1. Copy the example into the base:
+
+   ```bash
+   cd kubernetes/apps/workloads/example-app
+   cp rollout-bluegreen-example.yaml base/rollout-bluegreen.yaml
+   ```
+
+2. In [`base/kustomization.yaml`](../../kubernetes/apps/workloads/example-app/base/kustomization.yaml), replace `rollout.yaml` with `rollout-bluegreen.yaml` in the `resources:` list. (Keep `service.yaml` — the blue-green strategy references the same stable/canary Services by name as active/preview.)
+
+3. The canary `VirtualService` weight block no longer applies — blue-green shifts traffic by swapping Service selectors, not Istio weights — but the `VirtualService` itself stays (it still routes the host to the stable Service).
+
+4. Commit and push; ArgoCD syncs it. Because the `Rollout` name is unchanged, Argo Rollouts treats it as a strategy change in place — the running ReplicaSet becomes "blue" and the next image bump exercises the preview/promote flow.
+
+5. Verify with a throwaway image bump in the staging overlay:
+
+   ```bash
+   kubectl argo rollouts get rollout example-app -n example-app --watch
+   # expect: new ReplicaSet at full scale, status Paused, preview Service pointing at it
+   kubectl argo rollouts promote example-app -n example-app
+   # expect: activeService selector flips, old RS lingers for scaleDownDelaySeconds
+   ```
+
+To go back to canary, revert the kustomization change in Git — same mechanism in reverse.
+
 ## Rollback
 
 Both strategies support the same rollback primitive — `kubectl argo rollouts undo <name>` (or ArgoCD's own rollback UI, since it's a Git-tracked spec change). Canary auto-rollback via failed `AnalysisTemplate` runs is the default expectation; blue-green rollback is manual/instant since the old ReplicaSet is still warm. See [../runbooks/canary-rollback-runbook.md](../runbooks/canary-rollback-runbook.md) for the exact commands and what to check first.

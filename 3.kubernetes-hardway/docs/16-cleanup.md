@@ -82,13 +82,33 @@ kubectl config delete-cluster kubernetes-the-hard-way 2>/dev/null || true
 kubectl config delete-user admin 2>/dev/null || true
 ```
 
+### Verify the reset actually completed
+
+Spot-check one master and one worker — every command should come back
+empty/inactive:
+
+```bash
+ssh admin@lab-master1 'systemctl is-active etcd kube-apiserver 2>/dev/null; ls /var/lib/etcd /etc/etcd 2>&1'
+# expect: "inactive" (or "not-found") twice, then "No such file or directory" for both dirs
+
+ssh admin@lab-node1 'systemctl is-active kubelet containerd 2>/dev/null; ls /etc/cni /var/lib/kubelet 2>&1; ip link show cnio0 2>&1'
+# expect: inactive/not-found, missing dirs, and "does not exist" for cnio0
+
+ssh admin@lab-server 'systemctl is-active haproxy 2>&1; ss -tlnp | grep 6443 || echo "6443 free"'
+# expect: inactive/not-found and "6443 free"
+```
+
+If any service still reports `active` or a directory survives, re-run that
+node's block above — the VMs are then clean enough to restart the guide
+from [01](01-prerequisites.md).
+
 ## Option B — Destroy the VMs entirely
 
 **Run on:** your host machine (not any lab VM — the machine that runs
 `vagrant`), inside `vagrant/`.
 
 ```bash
-cd vagrant
+cd 1.vagrant
 vagrant destroy -f
 ```
 

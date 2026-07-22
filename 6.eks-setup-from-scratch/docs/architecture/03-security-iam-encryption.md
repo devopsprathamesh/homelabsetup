@@ -68,3 +68,12 @@ Pod-to-pod traffic is authenticated and encrypted mesh-wide by default via Istio
 ## API endpoint access
 
 `endpoint_private_access` is always `true`. `endpoint_public_access` is exposed but restricted to `admin_cidrs` (never `0.0.0.0/0` — enforced by convention, not a Terraform validation block, so review this on every `tfvars` change). Cluster access itself uses modern **access entries** (`authentication_mode = "API"`), not the legacy `aws-auth` ConfigMap.
+
+## Verify it yourself
+
+```bash
+aws eks describe-cluster --name eks-platform-prod --region us-east-1 \
+  --query 'cluster.{enc:encryptionConfig,logs:logging.clusterLogging[?enabled==`true`].types}'   # KMS key ARN + all 5 log types
+aws eks list-pod-identity-associations --cluster-name eks-platform-prod --region us-east-1       # controllers mapped to roles
+aws eks list-access-entries --cluster-name eks-platform-prod --region us-east-1                  # access entries, no aws-auth ConfigMap
+```

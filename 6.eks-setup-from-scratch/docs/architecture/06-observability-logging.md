@@ -55,3 +55,11 @@ Control-plane logs ([03 — Security](03-security-iam-encryption.md#control-plan
 | Application error rate / latency | Managed Grafana dashboards querying AMP |
 | Application error logs | CloudWatch `/eks/<cluster>/application`, filtered by pod/namespace |
 | Is a canary rollout's analysis failing, and why | `kubectl argo rollouts get rollout <name>` plus the same Grafana dashboards the `AnalysisTemplate` itself queries |
+
+## Verify it yourself
+
+```bash
+kubectl get pods -n monitoring 2>/dev/null || kubectl get pods -A | grep -E 'prometheus|fluent'   # collectors running
+aws amp list-workspaces --region us-east-1 --query 'workspaces[].{alias:alias,status:status.statusCode}'   # AMP workspace ACTIVE
+aws logs describe-log-groups --log-group-name-prefix /eks/eks-platform --region us-east-1 --query 'logGroups[].logGroupName'   # both log paths landing
+```

@@ -52,3 +52,11 @@ Including the ingress gateway, DNS, and load balancer hops, is covered in [07 �
 ## Gotcha: sidecar draining vs Karpenter node consolidation
 
 Covered in detail in [01 — Compute](01-compute-karpenter-vs-automode.md#gotcha-karpenter-consolidation-vs-istio-sidecar-draining) — native sidecars (`ENABLE_NATIVE_SIDECARS=true`) plus a 5-minute Karpenter `terminationGracePeriod` give in-flight mTLS connections time to drain before a node is terminated.
+
+## Verify it yourself
+
+```bash
+istioctl proxy-status                                        # every sidecar SYNCED with istiod (the xDS push path)
+kubectl get pods -n example-app -o jsonpath='{.items[0].spec.containers[*].name}'; echo   # istio-proxy injected
+istioctl x describe pod $(kubectl get pod -n example-app -o name | head -1 | cut -d/ -f2) -n example-app   # confirms mTLS mode on the workload
+```

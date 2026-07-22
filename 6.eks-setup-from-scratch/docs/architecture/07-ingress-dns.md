@@ -62,3 +62,14 @@ sequenceDiagram
 ## Cross-region behavior (DR)
 
 The DNS step above (`R53 -->> PublicDNS`) is exactly what changes during a regional failover — the record `app.example.com` points at either the primary or DR region's NLB depending on the `terraform/modules/route53-failover` health-check state. See [../dr-ha/02-multi-region-active-passive-dr.md](../dr-ha/02-multi-region-active-passive-dr.md) and [../runbooks/dr-failover-runbook.md](../runbooks/dr-failover-runbook.md) for exactly how and when that flip happens.
+
+## Verify it yourself
+
+Trace each hop of the diagram above:
+
+```bash
+dig app.example.com                                          # resolves to the primary region's NLB
+kubectl get svc -n istio-system istio-ingressgateway -o jsonpath='{.status.loadBalancer.ingress[0].hostname}{"\n"}'   # that same NLB
+kubectl get gateway,virtualservice -A                        # host routing from gateway to the app
+curl -sv https://app.example.com/healthz 2>&1 | grep -E 'subject:|HTTP/'   # cert-manager cert + 200 through the whole path
+```

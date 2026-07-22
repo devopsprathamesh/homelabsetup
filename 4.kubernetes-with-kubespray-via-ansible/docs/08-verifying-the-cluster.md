@@ -1,5 +1,20 @@
 # 08 — Verifying the Cluster
 
+Each check below proves one layer, in dependency order — if a layer fails,
+the ones after it can't pass, so fix in this order:
+
+```mermaid
+flowchart LR
+    K1["§1–2 kubeconfig + kubectl<br/>proves: you can reach<br/>the API via the LB"] --> K3["§3 get nodes<br/>proves: every kubelet<br/>registered + CNI up"]
+    K3 --> K4["§4 kube-system pods<br/>proves: control plane,<br/>DNS, Calico all Running"]
+    K4 --> K6["§6 smoke test<br/>proves: scheduling, Service<br/>routing, pod networking,<br/>image pulls — end to end"]
+```
+
+If any step fails, jump to [12 — Troubleshooting](12-troubleshooting.md) —
+its decision tree starts exactly where this doc leaves off (API unreachable
+→ LB vs apiserver; node `NotReady` → CNI/swap; etc.). Don't continue to the
+next check with a failing one behind you.
+
 ## 1. Fetch the admin kubeconfig
 
 Kubespray writes it on every `kube_control_plane` host at

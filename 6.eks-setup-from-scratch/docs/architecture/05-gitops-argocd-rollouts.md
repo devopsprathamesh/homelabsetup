@@ -65,3 +65,11 @@ sequenceDiagram
 ```
 
 See [08 — Canary & Blue-Green](08-progressive-delivery-canary-bluegreen.md) for the full deployment-strategy detail, and [`kubernetes/apps/workloads/example-app/`](../../kubernetes/apps/workloads/example-app) for the actual manifests.
+
+## Verify it yourself
+
+```bash
+kubectl get applications -n argocd                           # root app-of-apps + child apps, Synced/Healthy
+kubectl -n argocd get application example-app -o jsonpath='{.spec.source.repoURL}{"\n"}'   # points at THIS repo — the ownership boundary
+kubectl argo rollouts get rollout example-app -n example-app # Rollout (not Deployment) managing the pods
+```

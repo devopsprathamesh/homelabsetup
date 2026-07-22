@@ -1,5 +1,29 @@
 # 12 — Troubleshooting
 
+## Start here: symptom → section decision tree
+
+```mermaid
+flowchart TD
+    S[Something is broken] --> Q1{Did ansible-playbook<br/>itself fail?}
+    Q1 -- "hangs / unreachable host" --> SSH["SSH or wedged VM<br/>(§ hangs or times out)"]
+    Q1 -- "'Could not get lock' on apt" --> APT["unattended-upgrades<br/>(§ apt lock contention)"]
+    Q1 -- "image pull error" --> PULL["transient network / Hub rate limit<br/>(§ image pull error)"]
+    Q1 -- "etcd health task failed" --> ETCD["etcd member / clock skew<br/>(§ etcd health check)"]
+    Q1 -- "no, playbook succeeded" --> Q2{Can kubectl reach<br/>the API?}
+    Q2 -- no --> Q3{Does curl to a master's<br/>:6443 work directly?}
+    Q3 -- yes --> HAP["HAProxy config/service<br/>(§ kubectl can't reach the API, step 2)"]
+    Q3 -- no --> APIS["apiserver itself down — crictl on the master<br/>(§ kubectl can't reach the API, step 3)"]
+    Q2 -- yes --> Q4{What's wrong then?}
+    Q4 -- "a node is NotReady" --> NR["CNI pod or swap<br/>(§ node NotReady)"]
+    Q4 -- "my group_vars change<br/>didn't apply" --> GV["duplicate key in merged files<br/>(§ change didn't take effect)"]
+```
+
+The order embedded in this tree is the general debugging principle for any
+Kubespray cluster: first rule out the layer *below* Kubernetes (SSH, VM,
+apt, clocks), then the entry path (LB → apiserver), and only then
+Kubernetes objects themselves. Each leaf names the section below with the
+commands.
+
 ## `ansible-playbook` hangs or times out on a specific host
 
 Usually SSH, not Ansible. Check directly first:

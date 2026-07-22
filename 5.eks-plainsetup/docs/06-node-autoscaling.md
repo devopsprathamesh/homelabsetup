@@ -103,6 +103,38 @@ Skip to [07-metrics-server-and-alb-ingress.md](07-metrics-server-and-alb-ingress
 
 ## Option B: Karpenter
 
+### How Karpenter provisions a node (the flow you're about to build)
+
+```mermaid
+sequenceDiagram
+    participant P as pending pod
+    participant K as Karpenter controller
+    participant EC2 as EC2 API
+    participant N as new node
+    P->>K: scheduler marks pod Unschedulable
+    K->>K: match pod requirements (cpu/mem/arch/zone)<br/>against NodePool constraints (B5)
+    K->>K: pick cheapest instance type(s) that fit,<br/>from EC2NodeClass's AMI/subnet/SG selectors
+    K->>EC2: CreateFleet — launch instance directly<br/>(no ASG, no launch-template edit)
+    EC2->>N: instance boots, nodeadm bootstraps kubelet<br/>with the same node role from doc 04
+    N->>K: node registers; Karpenter binds a NodeClaim to it
+    P->>N: scheduler places the pod (~40–60s end to end)
+    Note over K,N: later: consolidation — if pods fit on fewer/cheaper<br/>nodes, Karpenter drains and terminates this one
+```
+
+And the spot-interruption path B2 exists for:
+
+```mermaid
+flowchart LR
+    EV["EC2 emits Spot Interruption Warning<br/>(2-minute notice)"] --> EB["EventBridge rule<br/>(B2)"] --> SQS["SQS queue<br/>(B2)"] --> KC["Karpenter polls the queue"]
+    KC --> D["cordon + drain the doomed node,<br/>launch replacement BEFORE<br/>EC2 reclaims it"]
+```
+
+Contrast with Option A to see why the table above says what it says:
+Cluster Autoscaler can only nudge an existing ASG's `desiredSize` and wait,
+so every node is another `t3.medium`; Karpenter talks to the EC2 fleet API
+per pending pod, which is why it's faster, instance-type-flexible, and needs
+its own IAM/SQS plumbing.
+
 ### B1. Prerequisites specific to Karpenter
 
 - `helm` (already in [01-prerequisites.md](01-prerequisites.md))

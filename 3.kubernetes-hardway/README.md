@@ -1,7 +1,7 @@
 # Kubernetes the Hard Way — this lab
 
 A from-scratch Kubernetes install (no kubeadm, no installer scripts) targeting
-the 7 VMs already provisioned by [`../vagrant/`](../vagrant/): every control
+the 7 VMs already provisioned by [`../1.vagrant/`](../1.vagrant/): every control
 plane and node component is a hand-built binary running as a systemd unit,
 following the shape of Kelsey Hightower's [Kubernetes the Hard Way](https://github.com/kelseyhightower/kubernetes-the-hard-way),
 adapted to this lab's topology.
@@ -22,28 +22,25 @@ All nodes: Ubuntu 24.04, `admin` user, passwordless sudo, passwordless SSH
 from `server` and from the desktop host (see [../README.md](../README.md)).
 Network: `192.168.56.0/24`, host-only, not reachable outside the host.
 
+```mermaid
+flowchart TD
+    CLI["client machine<br/>kubectl"] --> LB["server (LB)<br/>HAProxy :6443<br/>TCP passthrough"]
+    LB --> M1["master1<br/>etcd + apiserver<br/>controller-mgr, scheduler"]
+    LB --> M2["master2<br/>etcd + apiserver<br/>controller-mgr, scheduler"]
+    LB --> M3["master3<br/>etcd + apiserver<br/>controller-mgr, scheduler"]
+    M1 <-. "Raft (2379/2380)" .-> M2
+    M2 <-. "Raft (2379/2380)" .-> M3
+    M1 <-. "Raft (2379/2380)" .-> M3
+    N1["node1<br/>kubelet, kube-proxy,<br/>containerd"] -- "via LB :6443" --> LB
+    N2["node2<br/>kubelet, kube-proxy,<br/>containerd"] -- "via LB :6443" --> LB
+    N3["node3<br/>kubelet, kube-proxy,<br/>containerd"] -- "via LB :6443" --> LB
 ```
-                              ┌─────────────────┐
-                              │  server (LB)    │
-                              │  HAProxy :6443  │
-                              └────────┬────────┘
-                    ┌──────────────────┼──────────────────┐
-                    ▼                  ▼                  ▼
-          ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐
-          │ master1           │ │ master2           │ │ master3           │
-          │ etcd + apiserver  │◄►│ etcd + apiserver  │◄►│ etcd + apiserver  │
-          │ controller-mgr    │ │ controller-mgr    │ │ controller-mgr    │
-          │ scheduler         │ │ scheduler         │ │ scheduler         │
-          └──────────────────┘ └──────────────────┘ └──────────────────┘
-                    ▲                  ▲                  ▲
-                    │                  │                  │
-          ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐
-          │ node1             │ │ node2             │ │ node3             │
-          │ kubelet           │ │ kubelet           │ │ kubelet           │
-          │ kube-proxy        │ │ kube-proxy        │ │ kube-proxy        │
-          │ containerd        │ │ containerd        │ │ containerd        │
-          └──────────────────┘ └──────────────────┘ └──────────────────┘
-```
+
+Two things this diagram encodes that matter throughout the guide: the
+workers never talk to a master directly — their kubeconfigs all point at
+HAProxy, which is what makes losing any single master invisible to them —
+and the three etcd members form their own full mesh (Raft) independent of
+the LB path.
 
 ## etcd fault tolerance
 

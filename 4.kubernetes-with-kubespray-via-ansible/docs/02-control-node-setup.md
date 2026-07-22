@@ -2,6 +2,30 @@
 
 All of this runs on `server` (192.168.56.10).
 
+## What the control node actually is
+
+Kubespray is "just" a very large Ansible project — there is no agent or
+daemon on the cluster nodes. Everything the playbooks do happens over the
+same SSH access you already verified in doc 01:
+
+```mermaid
+flowchart LR
+    CN["server (control node)<br/>venv: ansible + kubespray repo<br/>+ your inventory"] -- "SSH as admin,<br/>sudo to root" --> M1[master1]
+    CN -- SSH --> M2[master2]
+    CN -- SSH --> M3[master3]
+    CN -- SSH --> N1[node1]
+    CN -- SSH --> N2[node2]
+    CN -- SSH --> N3[node3]
+```
+
+For each task in a playbook, Ansible copies a small Python module to the
+target host over SSH, executes it there with sudo, collects the JSON result,
+and moves on — so the versions that matter for correctness are the ones in
+*this venv* (ansible itself, netaddr, jinja2), while the nodes only need
+Python 3 and SSH. That's why this whole doc is about getting the control
+node's Python environment exactly right, and why nothing gets installed on
+the cluster nodes yet.
+
 ## 1. Install the venv module (if step 4 of the prereqs doc flagged it)
 
 ```bash

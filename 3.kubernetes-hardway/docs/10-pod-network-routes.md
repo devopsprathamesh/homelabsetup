@@ -17,7 +17,11 @@ Recall the mapping:
 | node2 | 192.168.56.14  | 10.200.1.0/24  |
 | node3 | 192.168.56.15  | 10.200.2.0/24  |
 
-## Option A — add routes on every node (node1-3, master1-3, server)
+## Add routes on every node (node1-3, master1-3, server)
+
+(This is the manual static-route approach. The alternative — an overlay
+network that makes these routes unnecessary — is exactly what
+[13 — Migrating to Cilium](13-migrating-to-cilium.md) sets up later.)
 
 **Run on:** all 7 VMs — `node1`, `node2`, `node3`, `master1`, `master2`,
 `master3`, and `server` (masters and the LB need it too, so `kubectl

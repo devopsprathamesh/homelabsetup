@@ -64,3 +64,14 @@ Karpenter's default node termination gives pods a grace period, but an Envoy sid
 ## Gotcha: Pod Identity Agent must exist before Karpenter's IAM association
 
 Karpenter's controller authenticates via **Pod Identity**, not IRSA. The Pod Identity Agent addon (installed in [`terraform/modules/eks-core-addons`](../../terraform/modules/eks-core-addons)) must exist before Karpenter's Pod Identity association is created, or the controller pod hangs waiting for credentials at startup. This ordering is enforced explicitly via the `pod_identity_agent_dependency` variable passed into the `eks-karpenter` module from every `live/*` stack.
+
+## Verify it yourself
+
+See the provisioning flow described above happen on a live cluster:
+
+```bash
+kubectl get nodepools,ec2nodeclasses                        # Ready=True on both
+kubectl create deployment karp-test --image=nginx --replicas=20   # force pending pods
+kubectl get nodeclaims -w                                   # watch Karpenter create claims → nodes
+kubectl delete deployment karp-test                         # then watch consolidation reclaim them
+```

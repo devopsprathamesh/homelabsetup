@@ -59,6 +59,32 @@ getting `auto-direct-node-routes` and the interface name exactly right
 for not much benefit at lab scale. VXLAN is Cilium's default, needs zero
 manual routing, and is what the rest of this doc assumes.
 
+What VXLAN encapsulation actually does to a cross-node pod packet — this
+replaces the manual per-node routes from [10](10-pod-network-routes.md):
+
+```mermaid
+sequenceDiagram
+    participant PA as pod A (10.200.1.x on node1)
+    participant C1 as cilium on node1
+    participant NET as 192.168.56.0/24 (node network)
+    participant C2 as cilium on node2
+    participant PB as pod B (10.200.2.x on node2)
+    PA->>C1: IP packet: src 10.200.1.x → dst 10.200.2.x
+    C1->>C1: eBPF lookup: 10.200.2.0/24 lives<br/>behind node2's tunnel endpoint
+    C1->>NET: wrap in UDP/8472: outer src node1,<br/>outer dst node2, inner packet unchanged
+    Note over NET: the node network only ever sees<br/>node-IP → node-IP UDP — no pod IPs,<br/>so no static routes needed
+    NET->>C2: UDP arrives on cilium_vxlan
+    C2->>C2: strip outer header, eBPF delivers<br/>inner packet to pod B's veth
+    C2->>PB: IP packet: src 10.200.1.x → dst 10.200.2.x
+```
+
+This is why step 4 below removes the doc-10 routes: with encapsulation, the
+underlay never routes pod CIDRs at all — each Cilium agent maintains the
+"which node owns which pod CIDR" map itself (learned from `node.Spec.PodCIDR`)
+and tunnels accordingly. The cost is ~50 bytes of overhead per packet and
+one encap/decap per hop; the win is that pod networking works on any
+underlay that can pass UDP between nodes.
+
 ## The chicken-and-egg kube-proxy replacement usually has — already solved
 
 Cilium's kube-proxy replacement needs to reach the API server directly

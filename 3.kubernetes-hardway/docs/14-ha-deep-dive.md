@@ -26,6 +26,30 @@ you cause is the only variable.
 Keep this table in mind through the rest of the doc — each section below
 maps to one row.
 
+The same boundaries as a decision map — for any failure you cause below,
+this is how to reason about what should still work:
+
+```mermaid
+flowchart TD
+    F[Something failed] --> Q1{Is server / HAProxy down?}
+    Q1 -- yes --> LB["Cluster fine, but unreachable from outside<br/>(§7 — the lab's real SPOF)"]
+    Q1 -- no --> Q2{How many of 3 etcd members are down?}
+    Q2 -- "0–1" --> OK["Degraded but fully functional:<br/>reads AND writes work (quorum 2/3 holds)"]
+    Q2 -- "2–3" --> DOWN["Cluster refuses reads and writes<br/>(§5 — kubectl hangs, data intact)"]
+    DOWN --> Q3{"Is /var/lib/etcd still intact<br/>on the stopped members?"}
+    Q3 -- yes --> REC["Quorum recovery: just restart etcd (§5)"]
+    Q3 -- no --> DR["Disaster recovery: snapshot restore<br/>(doc 15)"]
+    OK --> Q4{Did the failed master hold a<br/>scheduler/CM lease?}
+    Q4 -- yes --> LEASE["Standby acquires lease within ~15s (§4)<br/>brief pause in scheduling, nothing lost"]
+    Q4 -- no --> NOOP[No visible effect at all]
+```
+
+Reading this map bottom-up is the whole lesson of the doc: worker loss and
+leader loss are non-events, one master is a non-event, and the only two
+things that actually take you offline are the LB (reachability, not data)
+and losing etcd quorum (availability, not data — until the data dirs
+themselves are gone).
+
 ## 1. Baseline: who's actually in charge right now
 
 All 3 masters run their own `kube-controller-manager` and `kube-scheduler`,
@@ -109,6 +133,31 @@ Default lease duration is 15s, so `rollout status` succeeding within the
 30s timeout is the proof — if failover were broken, the Pod would sit
 `Pending` (no scheduler assigning it a node) until the stopped scheduler
 came back.
+
+What that handover looks like on the wire:
+
+```mermaid
+sequenceDiagram
+    participant S1 as scheduler on master1 (leader)
+    participant API as kube-apiserver (any, via LB)
+    participant S2 as scheduler on master2 (standby)
+    loop every 10s (renewDeadline)
+        S1->>API: renew Lease kube-scheduler
+    end
+    Note over S1: systemctl stop kube-scheduler
+    S2->>API: try to acquire Lease — rejected,<br/>holder's renewTime still fresh
+    Note over API: leaseDuration (15s) passes<br/>with no renewal
+    S2->>API: acquire Lease (holderIdentity = master2_...)
+    API-->>S2: acquired
+    Note over S2: starts its scheduling loop —<br/>pending Pods get assigned now
+```
+
+The standbys were running the whole time; they were just blocked retrying
+the lease acquire every ~2s. Nothing "elects" in the Raft sense here — it's
+first-to-write-the-Lease-object wins, with the apiserver's optimistic
+concurrency (resourceVersion) guaranteeing only one write succeeds. The
+worst-case scheduling pause is leaseDuration + one retry interval, which is
+why your Pod stayed `Pending` for at most ~17s.
 
 ## 5. The etcd quorum boundary — where HA stops and DR starts
 

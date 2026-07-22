@@ -16,6 +16,35 @@ kubectl top nodes   # should return CPU/memory, not an error
 
 Provisions ALBs/NLBs for `Ingress` and `Service type=LoadBalancer` objects. Relies on the `kubernetes.io/role/elb` / `internal-elb` subnet tags from [02-networking-vpc.md](02-networking-vpc.md).
 
+How the reconcile loop works — this is what runs when the verify step below
+creates a `Service type=LoadBalancer`:
+
+```mermaid
+sequenceDiagram
+    participant U as kubectl apply Service/Ingress
+    participant API as EKS apiserver
+    participant C as ALB controller pod
+    participant ELB as AWS ELBv2 API
+    U->>API: create Service (type=LoadBalancer, nlb annotation)
+    API-->>C: watch event (controller watches Services/Ingresses/Endpoints)
+    C->>ELB: discover subnets by kubernetes.io/role/elb tag (doc 02)
+    C->>ELB: CreateLoadBalancer + TargetGroup + Listener<br/>(using the Pod Identity role's credentials)
+    C->>ELB: register targets — pod IPs directly (VPC CNI<br/>makes pod IPs routable VPC IPs, so no NodePort hop)
+    ELB-->>C: LB DNS name once provisioned
+    C->>API: patch Service .status.loadBalancer.ingress
+    Note over API: this patch is the moment EXTERNAL-IP<br/>stops showing &lt;pending&gt;
+    loop continuous reconcile
+        API-->>C: Endpoints change (pod added/removed)
+        C->>ELB: register/deregister targets to match
+    end
+```
+
+Two failure modes fall straight out of this flow, both in
+[09-troubleshooting.md](09-troubleshooting.md): missing subnet tags break
+the discovery step (Service stays `<pending>` forever), and a wrong Pod
+Identity association breaks every ELB call with `AccessDenied` in the
+controller logs.
+
 ```bash
 cd ~/eks-plainsetup-tmp
 

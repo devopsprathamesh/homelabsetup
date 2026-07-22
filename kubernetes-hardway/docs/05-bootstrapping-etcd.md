@@ -186,6 +186,102 @@ This is also why `master3` joining an already-running cluster
 until the existing members explicitly `member add` it, it isn't part of
 anyone's quorum math yet, so nothing it says would count as a vote.
 
+### Raft in more detail: how "2 of 3" is actually enforced
+
+The diagrams above show *what* quorum guarantees; this is *how* Raft (the
+consensus algorithm etcd implements) actually makes only one leader and
+only one committed history possible, even across network failures. Worth
+understanding once, since **every single write Kubernetes ever makes** —
+every `kubectl create`, every kubelet status update — bottoms out in this
+exact mechanism. `kube-apiserver` itself keeps no state of its own and
+has no separate "Kubernetes-level" quorum; it's stateless and defers
+entirely to etcd for anything durable.
+
+**Leader election.** Every member starts a follower. If a follower goes
+too long without hearing from a leader, it assumes there isn't one and
+starts an election:
+
+```mermaid
+sequenceDiagram
+    participant M1 as master1
+    participant M2 as master2
+    participant M3 as master3
+    Note over M1,M3: all followers, term 0
+    M1->>M1: election timeout — no heartbeat seen
+    M1->>M1: becomes candidate, term 1, votes for itself
+    M1->>M2: RequestVote(term 1)
+    M1->>M3: RequestVote(term 1)
+    M2-->>M1: vote granted
+    M3-->>M1: vote granted
+    Note over M1: 2 of 3 votes (incl. its own) = majority<br/>master1 is leader for term 1
+    loop heartbeat interval
+        M1->>M2: AppendEntries (heartbeat, term 1)
+        M1->>M3: AppendEntries (heartbeat, term 1)
+    end
+```
+
+The **term** number is the whole trick: it only ever increases, every
+member votes at most once per term, and any message carrying an older
+term than a member has already seen is rejected outright. That's what
+makes two simultaneous leaders structurally impossible, not just
+unlikely — a second candidate would need a majority of votes *in a term
+no one else has already voted in*, and there's only one such term at a
+time.
+
+**Log replication and the commit index.** A write isn't "done" the
+moment the leader has it — only once a majority have it durably:
+
+```mermaid
+sequenceDiagram
+    participant API as kube-apiserver
+    participant L as leader (master1, term 1)
+    participant F1 as follower (master2)
+    participant F2 as follower (master3)
+    API->>L: write (e.g. create a Pod)
+    L->>L: append to local log at index N
+    L->>F1: AppendEntries(index N, entry)
+    L->>F2: AppendEntries(index N, entry)
+    F1-->>L: success — logged at index N
+    F2-->>L: success — logged at index N
+    Note over L: index N now on 2 of 3 (incl. itself)<br/>= majority → commit index advances to N
+    L-->>API: write acknowledged
+    L->>F1: next heartbeat carries commit index = N
+    L->>F2: next heartbeat carries commit index = N
+```
+
+This is the literal mechanics behind "2 of 3 acked" from the simpler
+diagram above — the leader doesn't tell `kube-apiserver` "committed"
+until a majority have the entry on disk, so even if the leader died the
+instant after acknowledging, the entry survives on at least one
+remaining member of any future majority.
+
+**Why a network partition doesn't produce two leaders.** This is the
+scenario the term mechanism above exists for:
+
+```mermaid
+flowchart TD
+    subgraph Partition["network splits the cluster in two"]
+        M1P["master1 (isolated)"]
+        M2P["master2"]
+        M3P["master3"]
+    end
+    M2P <-->|still connected| M3P
+    M1P -.->|no connection| M2P
+    M1P -.->|no connection| M3P
+    M1P --> E1["times out, tries to become<br/>candidate for a new term —<br/>can only get its own vote: 1 of 3"]
+    E1 --> Stuck["not a majority — stays a candidate<br/>forever, never becomes leader,<br/>accepts no writes"]
+    M2P --> E2["can elect a new leader<br/>between themselves: 2 of 3"]
+    E2 --> Continues["that side keeps serving<br/>reads and writes normally"]
+```
+
+The isolated minority can increment its own term and ask for votes all
+it wants — it physically cannot reach enough members to form a majority,
+so it can never produce a leader, ever, for as long as the partition
+lasts. The majority side, meanwhile, can freely elect a new leader in a
+higher term and keep going. That asymmetry — a minority can always be
+outvoted, a majority never needs the missing members' permission — is
+the entire reason "2 of 3" is safe to treat as "the cluster," full stop.
+
 ## 6. Adding master3 to an already-running cluster
 
 Only relevant if `master1`/`master2` etcd were already up and running

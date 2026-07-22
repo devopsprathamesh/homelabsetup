@@ -211,6 +211,62 @@ collide. If you SSH in with a different key than `~/.ssh/id_ed25519`, edit
 follow you to another machine. If you add a node, re-run the same `sudo`
 block manually (or script it) to add its `lab-<name>` entry here too.
 
+## Smaller lab variants (8GB / 16GB machines)
+
+The full 7-node layout reserves ~13GB RAM. If that's more than your machine
+has, shrink the `NODES` array (see "What you can change" below) to one of
+these — the guides still work, you just skip the docs noted:
+
+**~5GB RAM — minimum viable (any 8GB laptop):** 1 master + 2 workers, no LB.
+
+```ruby
+NODES = [
+  { name: "master1", ip: "192.168.56.11", cpus: 2, memory: 2048 },
+  { name: "node1",   ip: "192.168.56.13", cpus: 1, memory: 1536 },
+  { name: "node2",   ip: "192.168.56.14", cpus: 1, memory: 1536 },
+]
+```
+
+- Skip the load-balancer docs entirely (hard way: [07](3.kubernetes-hardway/docs/07-load-balancer.md);
+  Kubespray: [05](4.kubernetes-with-kubespray-via-ansible/docs/05-load-balancer-haproxy.md))
+  and use `192.168.56.11:6443` (master1) anywhere a doc says to use the LB
+  address `192.168.56.10:6443` — kubeconfigs, HAProxy checks, Cilium's
+  `k8sServiceHost`.
+- Wherever a doc loops over `master1 master2 master3`, run the block for
+  `master1` only, and drop the other two members from etcd's
+  `--initial-cluster` list (a single-member etcd is valid — quorum of 1).
+- You lose the HA chapters (hard way [14](3.kubernetes-hardway/docs/14-ha-deep-dive.md),
+  Kubespray [13](4.kubernetes-with-kubespray-via-ansible/docs/13-ha-deep-dive.md))
+  — there's nothing redundant to fail over — but certs, etcd, control plane,
+  workers, DNS, smoke tests, Cilium, and snapshot-based DR all work the same.
+
+**~9GB RAM — keeps the HA lessons (comfortable on 16GB):** LB + 3 masters +
+1 worker.
+
+```ruby
+NODES = [
+  { name: "server",  ip: "192.168.56.10", cpus: 1, memory: 1024 },
+  { name: "master1", ip: "192.168.56.11", cpus: 2, memory: 2048 },
+  { name: "master2", ip: "192.168.56.12", cpus: 2, memory: 2048 },
+  { name: "master3", ip: "192.168.56.16", cpus: 2, memory: 2048 },
+  { name: "node1",   ip: "192.168.56.13", cpus: 1, memory: 1536 },
+]
+```
+
+- Every doc works as written except the multi-worker parts: run
+  worker-node loops for `node1` only, and expect single-node scheduling in
+  the smoke tests (cross-node pod-routing steps in hard way
+  [10](3.kubernetes-hardway/docs/10-pod-network-routes.md) become trivial).
+- This keeps the best material intact: etcd quorum, leader election,
+  killing masters, snapshot/restore.
+
+Two general notes for any downsized layout: the 2-vCPU master requirement
+is kubeadm's preflight check — the hard-way build (stage 3) doesn't use
+kubeadm, so masters can drop to `memory: 1536` there if you're tight
+(Kubespray/kubeadm in stage 4 does enforce it) — and you never need all
+nodes up at once: `vagrant up master1` starts just one, `vagrant halt node2`
+parks one to free RAM.
+
 ## What you can change
 
 Everything node-related lives in the `NODES` array at the top of the

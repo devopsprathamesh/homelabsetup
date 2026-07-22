@@ -42,6 +42,14 @@ HAProxy, which is what makes losing any single master invisible to them —
 and the three etcd members form their own full mesh (Raft) independent of
 the LB path.
 
+**Running on a smaller machine?** The guide is written for this 7-node
+topology, but it works downsized — see "Smaller lab variants" in the
+[root README](../README.md) for 3-node and 5-node layouts and exactly which
+docs/loops to adjust. The short version: run any `master1 master2 master3`
+loop for the masters you actually have, list only those members in etcd's
+`--initial-cluster` ([05](docs/05-bootstrapping-etcd.md)), and without the
+LB use master1's IP wherever a doc says `192.168.56.10:6443`.
+
 ## etcd fault tolerance
 
 With `master3` added, etcd now has 3 members — Raft consensus needs a

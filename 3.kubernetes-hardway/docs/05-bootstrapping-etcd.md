@@ -63,6 +63,11 @@ ETCD_NAME=master3
 The `--initial-cluster` list is identical on all three nodes — every
 member needs to agree on the full membership up front.
 
+(Downsized single-master lab, per the root README's "Smaller lab
+variants"? List only `master1=https://192.168.56.11:2380` in
+`--initial-cluster` and do this doc on master1 alone — a one-member etcd
+is valid, it just has quorum 1 and therefore no fault tolerance.)
+
 ```bash
 cat <<EOF | sudo tee /etc/systemd/system/etcd.service
 [Unit]

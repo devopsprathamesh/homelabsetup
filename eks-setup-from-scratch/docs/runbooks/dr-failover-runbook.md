@@ -2,6 +2,31 @@
 
 Use this when the primary region (`us-east-1`) is confirmed down — not for a single-AZ issue (Tier 1 HA handles that automatically, see [../dr-ha/01-single-region-multi-az-ha.md](../dr-ha/01-single-region-multi-az-ha.md); nothing in this runbook should be needed for an AZ failure).
 
+## Flow
+
+```mermaid
+flowchart TD
+    Start(["Alert: primary region\nhealth check failing"]) --> Confirm{"0. Real regional\noutage? (AWS Health\nDashboard, API\nunreachable, not a\nbad deploy)"}
+    Confirm -->|"No — it's a bad deploy"| Redirect["Use canary-rollback-runbook.md\ninstead — STOP here"]
+    Confirm -->|"No — false alarm"| StopHere(["No action needed"])
+    Confirm -->|Yes| Auto["Route53 health check already\nrouting NEW resolutions to\nus-west-2 — automatic,\nno action needed"]
+    Auto --> Restore["1. velero restore create\nfrom latest backup"]
+    Restore --> Scale["2. Scale example-app\nto production replica count"]
+    Scale --> Karp["Karpenter provisions\nworkload nodes on demand"]
+    Karp --> DNS{"3. dig app.example.com\nresolves to us-west-2?"}
+    DNS -->|No| CheckHC["Check Route53 health\ncheck status directly"]
+    CheckHC --> DNS
+    DNS -->|Yes| Smoke["4. Smoke test:\ncurl /healthz, check\nGrafana error rate"]
+    Smoke --> Comms["5. Communicate status,\nmonitor 15-30 min"]
+    Comms --> Wait(["Wait for us-east-1\nto recover"])
+    Wait --> Failback["6. Failback:\nbackup us-west-2 → restore\ninto us-east-1 → re-enable\nprimary health check"]
+    Failback --> ScaleDown["Scale dr-prod back down\nto warm-standby levels"]
+    ScaleDown --> End(["Done"])
+
+    style Confirm fill:#f9f,stroke:#333
+    style DNS fill:#f9f,stroke:#333
+```
+
 ## 0. Confirm this is real
 
 Route53's health check on the primary NLB will already have started routing new DNS resolutions to `us-west-2` automatically — that part needs no action. Before doing anything else in this runbook:

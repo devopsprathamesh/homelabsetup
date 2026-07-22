@@ -2,6 +2,26 @@
 
 Use this when a `Rollout` is mid-deployment and needs to stop — either the automated `AnalysisTemplate` already caught it, or you noticed something the automated gate didn't.
 
+## Decision flow
+
+```mermaid
+flowchart TD
+    Start(["Rollout mid-deployment,\nneeds to stop"]) --> Which{"Which strategy?"}
+    Which -->|Canary| AutoCheck{"Did AnalysisTemplate\nalready fail it?"}
+    Which -->|Blue-green| BG["kubectl argo rollouts undo\n— flips activeService back to\nthe still-warm old ReplicaSet,\ninstant, no pod startup wait"]
+    AutoCheck -->|Yes| AlreadyDone["Already handled:\nweights reset to 100% stable,\ncanary ReplicaSet scaled down.\nJust investigate why."]
+    AutoCheck -->|"No — you noticed\nsomething manually"| Abort["kubectl argo rollouts abort\n— immediate reset to\n100% stable"]
+    Abort --> FullFix{"Root cause needs a\nfull revert, not just\na traffic reset?"}
+    AlreadyDone --> FullFix
+    FullFix -->|Yes| GitRevert["git revert the commit\nthat changed the image tag,\npush — ArgoCD reconciles\nautomatically (source of truth\nstays in Git)"]
+    FullFix -->|"No — abort was enough"| Investigate
+    GitRevert --> Investigate["After any rollback:\ncheck AnalysisTemplate results /\nGrafana; tighten the\nsuccess-rate query if the\nautomated gate missed it"]
+    BG --> Investigate
+
+    style AutoCheck fill:#f9f,stroke:#333
+    style FullFix fill:#f9f,stroke:#333
+```
+
 ## If the automated analysis already failed
 
 Argo Rollouts has already reset the `VirtualService` weights to 100% stable and scaled down the canary ReplicaSet — no action needed to stop the bad traffic. Confirm and investigate:

@@ -4,6 +4,24 @@ This is the single doc to follow top-to-bottom for a first-time install of this 
 
 Follow the steps **in order** — later stacks read earlier stacks' Terraform state via `terraform_remote_state`, so skipping ahead will fail with a missing-state error, not a subtle bug.
 
+## The apply order, and why it can't be reordered
+
+```mermaid
+flowchart TD
+    P0["0-1. Prerequisites +\nreplace placeholders"] --> P1["2. state-backend-bootstrap\n(us-east-1 AND us-west-2)"]
+    P1 --> P2["3. terraform/live/global\nFIRST PASS\n(enable_dr_failover_dns=false)\ncreates: Velero S3 bucket, backup KMS key"]
+    P2 --> P3["4. terraform/live/us-east-1/staging\ncreates: VPC, EKS, Karpenter,\nIstio, addons, ArgoCD"]
+    P3 -->|"soak period,\nverify staging is healthy"| P4["5. terraform/live/us-east-1/prod\nreads: global's outputs (Velero bucket)\ncreates: full prod stack +\nmulti-region KMS key"]
+    P4 --> P5["6. terraform/live/us-west-2/dr-prod\nreads: prod's state (KMS key ARN)\n+ global's state (Velero bucket)\ncreates: warm-standby DR cluster"]
+    P5 --> P6["7. terraform/live/global\nSECOND PASS\n(enable_dr_failover_dns=true)\nreads: prod's + dr-prod's Istio\ningress NLB outputs\ncreates: Route53 failover record"]
+    P6 --> P7["8. Full verification checklist"]
+
+    style P2 fill:#f9f,stroke:#333
+    style P6 fill:#f9f,stroke:#333
+```
+
+The `global` stack is applied **twice** (highlighted above) because it sits on both ends of a real dependency cycle: it must exist *before* `prod`/`dr-prod` (they read its Velero bucket name), but its DNS failover module can only be created *after* `prod`/`dr-prod` exist (it reads their load balancer outputs). Splitting it into two passes, gated by the `enable_dr_failover_dns` variable, is what breaks the cycle — see [`terraform/live/global/main.tf`](../terraform/live/global/main.tf).
+
 ## 0. Prerequisites
 
 ### Tools
@@ -100,7 +118,23 @@ This creates the shared Velero backup bucket and its dedicated multi-region KMS 
 
 ## 4. `terraform/live/us-east-1/staging` — first real cluster
 
-This is your fastest feedback loop — always validate changes here before touching `prod`.
+This is your fastest feedback loop — always validate changes here before touching `prod`. The same module sequence runs for `prod` and `dr-prod` in steps 5-6 — this is what a single `terraform apply` is actually doing under the hood, in dependency order (see [`terraform/live/us-east-1/staging/main.tf`](../terraform/live/us-east-1/staging/main.tf)):
+
+```mermaid
+flowchart TD
+    VPC["vpc\n3 AZs, public/private/intra subnets"] --> EKS
+    KMS["kms\nsecrets encryption key"] --> EKS
+    EKS["eks_cluster\ncontrol plane + core node group"] --> CORE
+    CORE["eks_core_addons\nPod Identity Agent → VPC CNI/kube-proxy\n→ CoreDNS → EBS CSI"] --> KARP
+    CORE --> ISTIO
+    KARP["eks_karpenter\ncontroller + default NodePool/EC2NodeClass"]
+    ISTIO["istio\nistiod → ingress gateway → strict mTLS"] --> PLAT
+    PLAT["platform_addons\nALB Controller, external-dns,\ncert-manager, external-secrets,\nFluent Bit, Velero"]
+    KARP --> OBS
+    PLAT --> ARGO
+    OBS["observability\nAMP + AMG + in-cluster Prometheus"] --> ARGO
+    ARGO["argocd_bootstrap\nArgoCD + Argo Rollouts +\nroot Application"] --> DONE["Cluster is now\nGitOps-managed —\nArgoCD takes over\nworkload deployment"]
+```
 
 ```bash
 cd ../us-east-1/staging

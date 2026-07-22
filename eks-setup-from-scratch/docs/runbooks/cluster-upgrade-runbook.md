@@ -2,6 +2,28 @@
 
 EKS control-plane and data-plane versions can skip at most one minor version per upgrade — never jump directly from e.g. 1.30 to 1.32. Do this in staging first, always.
 
+## Flow
+
+```mermaid
+flowchart TD
+    Start(["Target: bump one\nminor version"]) --> Preflight["1. Pre-flight:\ndeprecated API scan,\nHelm chart compat check\n(Karpenter, Istio, ArgoCD,\neks-blueprints-addons)"]
+    Preflight --> CP["2. Upgrade control plane\n(kubernetes_version in\neks_cluster module)\n~20-30 min, AWS-managed,\nno API server downtime"]
+    CP --> Addons["3. Upgrade EKS-managed\naddons (VPC CNI, kube-proxy,\nCoreDNS, EBS CSI, Pod\nIdentity Agent) to match"]
+    Addons --> PDB{"PodDisruptionBudgets\nset for ArgoCD, Istiod,\nKarpenter?"}
+    PDB -->|No| AddPDB["Add them first —\nrequired before the\nnext step's rolling drain"]
+    AddPDB --> Nodes
+    PDB -->|Yes| Nodes["4. Rolling update the\ncore managed node group\n(update-nodegroup-version)"]
+    Nodes --> Karp["5. Karpenter-provisioned\nnodes: drift-detected and\nreplaced automatically,\nor force with\nkarpenter.sh/force-drift"]
+    Karp --> Verify["6. Verify: nodes report new\nversion, no stuck pods,\nno stuck Rollouts, Grafana\nshows no anomaly"]
+    Verify --> Soak{"Clean through a full\nbusiness day in staging?"}
+    Soak -->|No| Wait(["Keep soaking —\ndo not promote yet"])
+    Soak -->|Yes| Promote["7. Repeat steps 2-6\nagainst prod,\nthen dr-prod"]
+    Promote --> Done(["Upgrade complete"])
+
+    style PDB fill:#f9f,stroke:#333
+    style Soak fill:#f9f,stroke:#333
+```
+
 ## 1. Pre-flight checks
 
 ```bash
